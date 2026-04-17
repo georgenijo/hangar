@@ -51,20 +51,20 @@ Write this exact JSON structure to `models.json` in the same directory as contex
   "complexity": "low|medium|high",
   "reasoning": "One sentence explaining why this complexity level",
   "assignments": {
-    "architect": "claude-sonnet-4-6 or claude-opus-4-7",
-    "senior-reviewer": "claude-sonnet-4-6 or claude-opus-4-7",
-    "builder": "claude-sonnet-4-6",
-    "tester": "claude-sonnet-4-6",
-    "fixer": "claude-sonnet-4-6"
+    "architect": "sonnet or opus",
+    "senior-reviewer": "sonnet or opus",
+    "builder": "sonnet",
+    "tester": "sonnet",
+    "fixer": "sonnet"
   }
 }
 ```
 
 Assignment rules:
-- **low**: all claude-sonnet-4-6
-- **medium**: architect=claude-opus-4-7, rest=claude-sonnet-4-6
-- **high**: architect=claude-opus-4-7, senior-reviewer=claude-opus-4-7, rest=claude-sonnet-4-6
-- builder/tester/fixer are ALWAYS claude-sonnet-4-6
+- **low**: all sonnet
+- **medium**: architect=opus, rest=sonnet
+- **high**: architect=opus, senior-reviewer=opus, rest=sonnet
+- builder/tester/fixer are ALWAYS sonnet
 
 ## Rules
 - Be thorough but concise — downstream agents will read this cold

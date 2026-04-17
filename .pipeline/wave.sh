@@ -58,7 +58,7 @@ $issue_body
 
 Write your context document to: $context_file" \
     --dangerously-skip-permissions \
-    --model claude-sonnet-4-6 \
+    --model sonnet \
     --system-prompt-file "$AGENTS_DIR/context-gatherer.md" \
     --add-dir "$PROJECT_DIR" \
     2>"$log_dir/context-gatherer-stderr.log" || { log_agent_end "context-gatherer" 1; return 1; }
@@ -89,7 +89,7 @@ $feedback
 
 Write your plan to: $plan_file" \
       --dangerously-skip-permissions \
-      --model claude-opus-4-7 \
+      --model opus \
       --system-prompt-file "$AGENTS_DIR/architect.md" \
       --add-dir "$PROJECT_DIR" \
       2>"$log_dir/architect-${round}-stderr.log" || { log_agent_end "architect" 1; return 1; }
@@ -113,7 +113,7 @@ $plan_content
 
 Write your review to: $review_file" \
       --dangerously-skip-permissions \
-      --model claude-opus-4-7 \
+      --model opus \
       --system-prompt-file "$AGENTS_DIR/senior-reviewer.md" \
       --add-dir "$PROJECT_DIR" \
       2>"$log_dir/reviewer-${round}-stderr.log" || { log_agent_end "senior-reviewer" 1; return 1; }

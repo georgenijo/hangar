@@ -4,11 +4,9 @@ This is a vendored copy of [claude-pipeline](https://github.com/georgenijo/claud
 
 ## Differences from upstream
 
-- **Model pinning**: all `opus`/`sonnet` aliases replaced with explicit IDs:
-  - `opus` → `claude-opus-4-7`
-  - `sonnet` → `claude-sonnet-4-6`
+- None at the moment. Uses upstream aliases `opus` / `sonnet`, which Claude Code resolves to the latest standard-context variants (Opus 4.7, Sonnet 4.6 standard as of 2026-04).
 
-Rationale: ensures the pipeline always uses the intended model versions regardless of Claude CLI alias drift.
+> Note: earlier we pinned explicit IDs (`claude-opus-4-7`, `claude-sonnet-4-6`) but the `-4-6` / `-4-7` bare IDs resolve to 1M-context variants which require Extra Usage on the account. Aliases sidestep that gate while still pointing at the latest model family.
 
 ## Usage
 
@@ -36,14 +34,14 @@ Runs every open GitHub issue in order. Logs to `~/Documents/pipeline-logs/hangar
 
 | Agent | Model (default) | Role |
 |---|---|---|
-| `context-gatherer` | `claude-sonnet-4-6` | Read issue + repo, produce context.md + models.json |
-| `architect` | `claude-opus-4-7` | Produce implementation plan |
-| `senior-reviewer` | `claude-opus-4-7` | Approve or request plan revisions |
-| `builder` | `claude-sonnet-4-6` | Implement the plan, commit |
-| `tester` | `claude-sonnet-4-6` | Run tests, produce results JSON |
-| `fixer` | `claude-sonnet-4-6` | Fix failing tests |
+| `context-gatherer` | `sonnet` | Read issue + repo, produce context.md + models.json |
+| `architect` | `opus` | Produce implementation plan |
+| `senior-reviewer` | `opus` | Approve or request plan revisions |
+| `builder` | `sonnet` | Implement the plan, commit |
+| `tester` | `sonnet` | Run tests, produce results JSON |
+| `fixer` | `sonnet` | Fix failing tests |
 
-The context-gatherer overrides these per issue based on complexity classification (see `agents/context-gatherer.md`).
+The context-gatherer can override these per issue based on complexity classification (see `agents/context-gatherer.md`).
 
 ## Safety
 
@@ -53,11 +51,7 @@ The context-gatherer overrides these per issue based on complexity classificatio
 
 ## Keeping upstream in sync
 
-Occasionally pull improvements from upstream:
-
 ```bash
 cd /tmp && rm -rf claude-pipeline && git clone https://github.com/georgenijo/claude-pipeline
 diff -r .pipeline/ /tmp/claude-pipeline/ | less
 ```
-
-Cherry-pick manually (preserve the model overrides).

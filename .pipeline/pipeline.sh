@@ -88,7 +88,7 @@ if ! should_skip_step "$LOG_FILE" "context-gatherer"; then
 
   MODELS_FILE="$LOGS_DIR/models.json"
 
-  run_agent "context-gatherer" "claude-sonnet-4-6" \
+  run_agent "context-gatherer" "sonnet" \
     "Gather context for this issue in the project at $PROJECT_DIR.
 
 Issue:
@@ -114,18 +114,18 @@ fi
 MODELS_FILE="$LOGS_DIR/models.json"
 
 # Defaults
-MODEL_ARCHITECT="claude-opus-4-7"
-MODEL_REVIEWER="claude-opus-4-7"
-MODEL_BUILDER="claude-sonnet-4-6"
-MODEL_TESTER="claude-sonnet-4-6"
-MODEL_FIXER="claude-sonnet-4-6"
+MODEL_ARCHITECT="opus"
+MODEL_REVIEWER="opus"
+MODEL_BUILDER="sonnet"
+MODEL_TESTER="sonnet"
+MODEL_FIXER="sonnet"
 
 if [ -f "$MODELS_FILE" ]; then
-  MODEL_ARCHITECT=$(jq -r '.assignments.architect // "claude-opus-4-7"' "$MODELS_FILE")
-  MODEL_REVIEWER=$(jq -r '.assignments["senior-reviewer"] // "claude-opus-4-7"' "$MODELS_FILE")
-  MODEL_BUILDER=$(jq -r '.assignments.builder // "claude-sonnet-4-6"' "$MODELS_FILE")
-  MODEL_TESTER=$(jq -r '.assignments.tester // "claude-sonnet-4-6"' "$MODELS_FILE")
-  MODEL_FIXER=$(jq -r '.assignments.fixer // "claude-sonnet-4-6"' "$MODELS_FILE")
+  MODEL_ARCHITECT=$(jq -r '.assignments.architect // "opus"' "$MODELS_FILE")
+  MODEL_REVIEWER=$(jq -r '.assignments["senior-reviewer"] // "opus"' "$MODELS_FILE")
+  MODEL_BUILDER=$(jq -r '.assignments.builder // "sonnet"' "$MODELS_FILE")
+  MODEL_TESTER=$(jq -r '.assignments.tester // "sonnet"' "$MODELS_FILE")
+  MODEL_FIXER=$(jq -r '.assignments.fixer // "sonnet"' "$MODELS_FILE")
   COMPLEXITY=$(jq -r '.complexity // "unknown"' "$MODELS_FILE")
 
   log_model_assignments "$MODELS_FILE"
@@ -134,7 +134,7 @@ if [ -f "$MODELS_FILE" ]; then
   echo "Model assignments (complexity=$COMPLEXITY):"
   echo "  architect=$MODEL_ARCHITECT reviewer=$MODEL_REVIEWER builder=$MODEL_BUILDER tester=$MODEL_TESTER fixer=$MODEL_FIXER"
 else
-  echo "No models.json — using defaults (claude-opus-4-7/claude-sonnet-4-6)"
+  echo "No models.json — using defaults (opus/sonnet)"
 fi
 
 # --- Step 2 & 3: Architect + Review Loop ---
