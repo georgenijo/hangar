@@ -93,10 +93,55 @@ impl Default for PushConfig {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LogSourceKind {
+    Journalctl,
+    Unit,
+    File,
+    PaneScrollback,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LogSourceConfig {
+    pub name: String,
+    pub kind: LogSourceKind,
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
+}
+
+fn default_tail_lines() -> usize {
+    500
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LogsConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_tail_lines")]
+    pub tail_lines: usize,
+    #[serde(default)]
+    pub sources: Vec<LogSourceConfig>,
+}
+
+impl Default for LogsConfig {
+    fn default() -> Self {
+        LogsConfig {
+            enabled: false,
+            tail_lines: 500,
+            sources: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct HangarConfig {
     #[serde(default)]
     pub push: PushConfig,
+    #[serde(default)]
+    pub logs: LogsConfig,
 }
 
 pub fn load() -> Result<HangarConfig> {

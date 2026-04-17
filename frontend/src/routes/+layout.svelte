@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import { page } from '$app/stores';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import LabelSidebar from '$lib/components/LabelSidebar.svelte';
 	import SpawnModal from '$lib/components/SpawnModal.svelte';
@@ -26,6 +27,10 @@
 
 <div class="app-shell" class:sidebar-collapsed={!sidebarOpen}>
 	<aside class="sidebar">
+		<nav class="nav-links">
+			<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>Sessions</a>
+			<a href="/logs" class="nav-link" class:active={$page.url.pathname === '/logs'}>Logs</a>
+		</nav>
 		<LabelSidebar />
 	</aside>
 
@@ -154,6 +159,34 @@
 	.page-content {
 		flex: 1;
 		overflow-y: auto;
+	}
+
+	.nav-links {
+		display: flex;
+		flex-direction: column;
+		padding: 8px;
+		gap: 2px;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.nav-link {
+		display: block;
+		padding: 6px 8px;
+		border-radius: var(--radius);
+		color: var(--text-muted);
+		text-decoration: none;
+		font-size: 0.85rem;
+		transition: all 0.1s;
+	}
+
+	.nav-link:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+
+	.nav-link.active {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		color: var(--accent);
 	}
 
 	@media (max-width: 768px) {

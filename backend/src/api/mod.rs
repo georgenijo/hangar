@@ -1,6 +1,7 @@
 pub mod broadcast;
 pub mod events;
 pub mod key;
+pub mod logs;
 pub mod metrics;
 pub mod output;
 pub mod prompt;
@@ -57,7 +58,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/sessions/:id/key", post(key::send_key))
         .route("/api/v1/broadcast", post(broadcast::broadcast))
         .route("/api/v1/metrics", get(metrics::get_metrics))
+        .route("/api/v1/logs/sources", get(logs::list_sources))
         .route("/ws/v1/sessions/:id/pty", get(crate::ws::pty::ws_pty))
+        .route("/ws/v1/logs", get(crate::ws::logs::ws_handler))
         .merge(crate::cc_hook_socket::hook_route())
         .with_state(state)
 }
