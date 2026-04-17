@@ -1,0 +1,4 @@
+<thinking>
+I need to read the file first.
+</thinking>
+⏺ Read(path: /tmp/foo.txt)

@@ -1,0 +1,1 @@
+Allow Read access to /etc/hosts?

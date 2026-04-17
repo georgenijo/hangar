@@ -1,5 +1,6 @@
 use anyhow::Result;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tracing::info;
 
 use hangard::{api, db::Db, events::EventBus, AppState};
@@ -17,9 +18,9 @@ async fn main() -> Result<()> {
 
     let db = Db::new(Some(state_dir.join("hangar.db"))).await?;
 
-    let marked = hangard::session::Session::mark_running_as_dead(db.pool()).await?;
+    let marked = hangard::session::Session::mark_active_as_exited(db.pool()).await?;
     if marked > 0 {
-        info!("marked {} stale sessions as dead", marked);
+        info!("marked {} stale sessions as exited", marked);
     }
 
     let event_bus = Arc::new(EventBus::new());
@@ -28,6 +29,7 @@ async fn main() -> Result<()> {
         db,
         event_bus,
         ring_dir: sessions_dir,
+        hook_channels: Arc::new(Mutex::new(HashMap::new())),
     };
 
     let router = api::router(app_state);

@@ -3,7 +3,60 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 
-use crate::session::SessionState;
+use crate::session::{SessionId, SessionState};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnRole {
+    System,
+    User,
+    Assistant,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AgentEvent {
+    TurnStarted {
+        turn_id: u64,
+        role: TurnRole,
+        content_start: Option<String>,
+    },
+    TurnFinished {
+        turn_id: u64,
+        tokens_used: u32,
+        duration_ms: u32,
+    },
+    ThinkingBlock {
+        turn_id: u64,
+        len_chars: u32,
+    },
+    ToolCallStarted {
+        turn_id: u64,
+        call_id: String,
+        tool: String,
+        args_preview: String,
+    },
+    ToolCallFinished {
+        turn_id: u64,
+        call_id: String,
+        ok: bool,
+        result_preview: String,
+    },
+    AwaitingPermission {
+        tool: String,
+        prompt: String,
+    },
+    ModelChanged {
+        model: String,
+    },
+    Error {
+        message: String,
+    },
+    ContextWindowSizeChanged {
+        pct_used: f32,
+        tokens: u64,
+    },
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -25,6 +78,10 @@ pub enum Event {
         rows: u16,
     },
     MetricsUpdated,
+    AgentEvent {
+        id: SessionId,
+        event: AgentEvent,
+    },
 }
 
 impl Event {
@@ -36,6 +93,7 @@ impl Event {
             Event::InputReceived { .. } => "InputReceived",
             Event::Resized { .. } => "Resized",
             Event::MetricsUpdated => "MetricsUpdated",
+            Event::AgentEvent { .. } => "AgentEvent",
         }
     }
 }

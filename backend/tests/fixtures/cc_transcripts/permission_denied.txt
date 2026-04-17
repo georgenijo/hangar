@@ -1,0 +1,2 @@
+Allow Read access to /etc/shadow?
+Denied.

@@ -2,6 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::fmt;
+use std::path::PathBuf;
 use std::str::FromStr;
 use ulid::Ulid;
 
@@ -40,21 +41,30 @@ impl AsRef<str> for SessionId {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionKind {
     Shell,
-    ClaudeCode,
+    ClaudeCode {
+        #[serde(default)]
+        config_override: Option<PathBuf>,
+        #[serde(default)]
+        project_dir: Option<PathBuf>,
+    },
     RawBytes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionState {
-    Starting,
-    Running,
-    Paused,
-    Exiting,
-    Dead,
+    #[serde(alias = "starting")]
+    Booting,
+    #[serde(alias = "running", alias = "paused")]
+    Idle,
+    Streaming,
+    Awaiting,
+    Error,
+    #[serde(alias = "dead", alias = "exiting")]
+    Exited,
 }
 
 impl fmt::Display for SessionState {
@@ -76,9 +86,11 @@ pub struct ExitInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMeta {
-    pub model: String,
-    pub prompt_tokens: u64,
-    pub completion_tokens: u64,
+    pub name: String,
+    pub version: Option<String>,
+    pub model: Option<String>,
+    pub tokens_used: u64,
+    pub last_tool_call: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,21 +179,23 @@ impl Session {
         Ok(())
     }
 
-    pub async fn mark_running_as_dead(pool: &SqlitePool) -> Result<u64> {
-        let running = serde_json::to_string(&SessionState::Running)?;
-        let starting = serde_json::to_string(&SessionState::Starting)?;
-        let dead = serde_json::to_string(&SessionState::Dead)?;
+    pub async fn mark_active_as_exited(pool: &SqlitePool) -> Result<u64> {
+        let booting = serde_json::to_string(&SessionState::Booting)?;
+        let idle = serde_json::to_string(&SessionState::Idle)?;
+        let streaming = serde_json::to_string(&SessionState::Streaming)?;
+        let exited = serde_json::to_string(&SessionState::Exited)?;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_millis() as i64;
 
         let result = sqlx::query(
-            "UPDATE sessions SET state = ?, last_activity_at = ? WHERE state = ? OR state = ?",
+            "UPDATE sessions SET state = ?, last_activity_at = ? WHERE state = ? OR state = ? OR state = ?",
         )
-        .bind(&dead)
+        .bind(&exited)
         .bind(now)
-        .bind(&running)
-        .bind(&starting)
+        .bind(&booting)
+        .bind(&idle)
+        .bind(&streaming)
         .execute(pool)
         .await?;
 
@@ -189,19 +203,52 @@ impl Session {
     }
 
     fn from_row(row: SessionRow) -> Result<Session> {
+        let kind =
+            serde_json::from_str::<SessionKind>(&row.kind).or_else(|_| -> Result<SessionKind> {
+                let bare: String = serde_json::from_str(&row.kind)?;
+                match bare.as_str() {
+                    "shell" => Ok(SessionKind::Shell),
+                    "claude_code" => Ok(SessionKind::ClaudeCode {
+                        config_override: None,
+                        project_dir: None,
+                    }),
+                    "raw_bytes" => Ok(SessionKind::RawBytes),
+                    other => anyhow::bail!("unknown session kind: {other}"),
+                }
+            })?;
+
+        let agent_meta = row
+            .agent_meta
+            .as_deref()
+            .map(|s| {
+                serde_json::from_str::<AgentMeta>(s).or_else(|_| {
+                    #[derive(Deserialize)]
+                    struct LegacyAgentMeta {
+                        model: String,
+                        prompt_tokens: u64,
+                        completion_tokens: u64,
+                    }
+                    let legacy: LegacyAgentMeta = serde_json::from_str(s)?;
+                    Ok::<_, serde_json::Error>(AgentMeta {
+                        name: "unknown".to_string(),
+                        version: None,
+                        model: Some(legacy.model),
+                        tokens_used: legacy.prompt_tokens + legacy.completion_tokens,
+                        last_tool_call: None,
+                    })
+                })
+            })
+            .transpose()?;
+
         Ok(Session {
             id: SessionId(row.id),
             slug: row.slug,
             node_id: row.node_id,
-            kind: serde_json::from_str(&row.kind)?,
+            kind,
             state: serde_json::from_str(&row.state)?,
             cwd: row.cwd,
             env: serde_json::from_str(&row.env)?,
-            agent_meta: row
-                .agent_meta
-                .as_deref()
-                .map(serde_json::from_str)
-                .transpose()?,
+            agent_meta,
             labels: serde_json::from_str(&row.labels)?,
             created_at: row.created_at,
             last_activity_at: row.last_activity_at,

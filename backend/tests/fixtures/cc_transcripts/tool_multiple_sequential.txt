@@ -1,0 +1,4 @@
+⏺ Read(path: /tmp/a.txt)
+
+⏺ Bash(command: cat /tmp/b.txt)
+

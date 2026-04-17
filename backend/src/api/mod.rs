@@ -9,5 +9,6 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/v1/sessions/:id/output", get(output::get_output))
         .route("/api/v1/sessions/:id/events", get(events::get_events))
+        .merge(crate::cc_hook_socket::hook_route())
         .with_state(state)
 }
