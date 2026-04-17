@@ -1,0 +1,23 @@
+# Build order for hangar issues — feed to batch.sh --issues
+#
+# Phase 1 → Phase 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 2.6 → 2.7 → 2.8
+#
+# Issue numbers are out of order because milestones were filed in multiple
+# batches. Do not re-create issues just to renumber.
+#
+# Usage:
+#   ./.pipeline/batch.sh --project-dir ~/Documents/hangar \
+#     --issues $(grep -v '^#' .pipeline/build-order.txt | paste -sd,)
+#
+# After Phase 2 ships (issue #4 closed), add Phase 3-6:
+#   # then kick off: --issues 5,11,12,13
+
+1
+6
+7
+8
+9
+2
+3
+10
+4
