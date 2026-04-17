@@ -35,6 +35,26 @@ Watch via:
 - The Phase 0 dashboard (`http://optiplex:8080`) for the tmux session containing Claude agents
 - GitHub notifications for PRs/issue comments
 
+### Parallel dispatch (faster)
+
+Once the serial pipeline proves out, use `parallel.sh` to run multiple issues
+concurrently — each in its own git worktree + tmux session. Same total token
+cost, ~3× faster wall-clock on this box.
+
+```bash
+cd ~/Documents/hangar
+./.pipeline/parallel.sh --project-dir "$PWD" --issues 6,7,8,9 --concurrent 3
+```
+
+Sessions are named `hangar-pipe-<issue>`. Attach any one with
+`tmux attach -t hangar-pipe-6`. Worktrees live at
+`~/Documents/hangar.worktrees/issue-<N>/`.
+
+Do **not** parallelize issues with a strong ordering dependency (e.g. run Phase 1
+alone before Phase 2.1 because 2.7 wants the tunnel); batch unrelated milestones
+together. Rule of thumb: Phase 2.1–2.4 can all run in parallel; merge conflicts
+are rare because they touch different modules.
+
 ### After Phase 2 ships (issue #4 closed)
 
 Phase 3–6 were filed without the `ready` label. To unblock them:
