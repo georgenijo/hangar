@@ -7,6 +7,7 @@
 	import { stateColor } from '$lib/utils';
 	import ChatView from '$lib/components/ChatView.svelte';
 	import TerminalView from '$lib/components/TerminalView.svelte';
+	import SandboxDiffView from '$lib/components/SandboxDiffView.svelte';
 
 	let { data }: { data: { session: Session } } = $props();
 
@@ -59,6 +60,21 @@
 				style="width: {eventsStore.contextUsage.pctUsed}%; background: {eventsStore.contextUsage.pctUsed > 80 ? '#f44336' : eventsStore.contextUsage.pctUsed > 60 ? '#ff9800' : 'var(--accent)'}"
 			></div>
 			<span class="context-label">{Math.round(eventsStore.contextUsage.pctUsed)}% context</span>
+		</div>
+	{/if}
+
+	{#if session.sandbox}
+		<div class="sandbox-section">
+			<div class="sandbox-header">
+				<span class="sandbox-badge">🔒 Sandbox: {session.sandbox.state.state}</span>
+			</div>
+			{#if session.sandbox.state.state === 'running' || session.sandbox.state.state === 'stopped'}
+				<SandboxDiffView sessionId={session.id} />
+			{:else if session.sandbox.state.state === 'merged'}
+				<span class="sandbox-notice">Overlay merged to host</span>
+			{:else if session.sandbox.state.state === 'failed'}
+				<span class="sandbox-error">Sandbox failed: {session.sandbox.state.message}</span>
+			{/if}
 		</div>
 	{/if}
 
@@ -170,5 +186,36 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.sandbox-section {
+		flex-shrink: 0;
+		border-bottom: 1px solid var(--border);
+		padding: 8px 16px;
+	}
+
+	.sandbox-header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 6px;
+	}
+
+	.sandbox-badge {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: #7c3aed;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.sandbox-notice {
+		font-size: 0.8rem;
+		color: #4caf50;
+	}
+
+	.sandbox-error {
+		font-size: 0.8rem;
+		color: #f44336;
 	}
 </style>

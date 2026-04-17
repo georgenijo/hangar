@@ -26,6 +26,7 @@ async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>) {
         sessions: Arc::new(RwLock::new(HashMap::new())),
         supervisor: None,
         start_time: Instant::now(),
+        sandbox_manager: None,
     };
 
     let router = api::router(state);

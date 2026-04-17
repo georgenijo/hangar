@@ -58,6 +58,27 @@ async fn main() -> Result<()> {
         }
     }
 
+    let config = hangard::config::load().unwrap_or_else(|e| {
+        warn!("config load failed: {e}, using defaults");
+        hangard::config::HangarConfig::default()
+    });
+
+    let sandbox_manager = if config.sandbox.enabled {
+        let mgr = hangard::sandbox::SandboxManager::new(
+            config.sandbox.overlay_base.clone(),
+            config.sandbox.restic_repo.clone(),
+        );
+        if let Err(e) = mgr.startup_cleanup(db.pool()).await {
+            warn!("sandbox startup_cleanup failed: {e}");
+        }
+        if let Err(e) = mgr.ensure_restic_repo().await {
+            warn!("ensure_restic_repo failed: {e}");
+        }
+        Some(Arc::new(mgr))
+    } else {
+        None
+    };
+
     let app_state = AppState {
         db,
         event_bus,
@@ -66,12 +87,9 @@ async fn main() -> Result<()> {
         sessions: sessions_registry,
         supervisor,
         start_time,
+        sandbox_manager,
     };
 
-    let config = hangard::config::load().unwrap_or_else(|e| {
-        warn!("config load failed: {e}, using defaults");
-        hangard::config::HangarConfig::default()
-    });
     tokio::spawn(hangard::push::run(
         app_state.event_bus.clone(),
         app_state.db.clone(),

@@ -42,6 +42,11 @@
 			<span class="state-dot" style="background: {stateColor(session.state)}" class:pulse={session.state === 'streaming'}></span>
 			{session.state}
 		</span>
+		{#if session.sandbox}
+			<span class="sandbox-badge">
+				🔒 {session.sandbox.state.state}
+			</span>
+		{/if}
 	</div>
 
 	<div class="tile-body">
@@ -197,5 +202,21 @@
 		font-size: 0.7rem;
 		color: var(--text-muted);
 		padding: 2px 4px;
+	}
+
+	.sandbox-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding: 2px 8px;
+		border-radius: 12px;
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		border: 1px solid;
+		background: #7c3aed20;
+		color: #7c3aed;
+		border-color: #7c3aed40;
 	}
 </style>

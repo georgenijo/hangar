@@ -32,6 +32,7 @@ export interface Session {
 	created_at: number;
 	last_activity_at: number;
 	exit?: ExitInfo | null;
+	sandbox?: SandboxStatus | null;
 }
 
 export interface LabelEntry {
@@ -62,7 +63,9 @@ export type AgentEvent =
 	| { type: 'awaiting_permission'; tool: string; prompt: string }
 	| { type: 'model_changed'; model: string }
 	| { type: 'error'; message: string }
-	| { type: 'context_window_size_changed'; pct_used: number; tokens: number };
+	| { type: 'context_window_size_changed'; pct_used: number; tokens: number }
+	| { type: 'sandbox_state_changed'; state: SandboxState }
+	| { type: 'sandbox_merged'; snapshot_id: string };
 
 export type Event =
 	| { type: 'session_created' }
@@ -81,9 +84,52 @@ export interface StoredEvent {
 	event: Event;
 }
 
+export interface SandboxSpec {
+	image: string;
+	cpu_quota?: number | null;
+	memory_limit_mb?: number | null;
+	egress_allowlist: EgressRule[];
+	allocate_tty: boolean;
+}
+
+export interface EgressRule {
+	host: string;
+	port: number;
+	proto: 'tcp' | 'udp';
+}
+
+export type SandboxState =
+	| { state: 'creating' }
+	| { state: 'running' }
+	| { state: 'stopped' }
+	| { state: 'merging' }
+	| { state: 'merged' }
+	| { state: 'failed'; message: string };
+
+export interface SandboxStatus {
+	spec: SandboxSpec;
+	state: SandboxState;
+	container_name: string;
+	overlay_dir: string;
+	project_dir: string;
+	merged_dir: string;
+}
+
+export interface FsDiffEntry {
+	path: string;
+	kind: 'added' | 'modified' | 'deleted';
+}
+
+export interface FsDiffResponse {
+	entries: FsDiffEntry[];
+	total: number;
+	truncated: boolean;
+}
+
 export interface CreateSessionRequest {
 	slug: string;
 	kind: SessionKind;
 	cols?: number;
 	rows?: number;
+	sandbox?: SandboxSpec;
 }

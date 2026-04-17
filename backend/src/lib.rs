@@ -8,6 +8,7 @@ pub mod pty;
 pub mod push;
 pub mod raw_fd_master;
 pub mod ringbuf;
+pub mod sandbox;
 pub mod session;
 pub mod supervisor_client;
 pub mod supervisor_protocol;
@@ -35,4 +36,5 @@ pub struct AppState {
     pub sessions: SessionRegistry,
     pub supervisor: Option<SupervisorClient>,
     pub start_time: Instant,
+    pub sandbox_manager: Option<Arc<sandbox::SandboxManager>>,
 }

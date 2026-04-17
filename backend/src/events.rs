@@ -56,6 +56,12 @@ pub enum AgentEvent {
         pct_used: f32,
         tokens: u64,
     },
+    SandboxStateChanged {
+        state: crate::sandbox::SandboxState,
+    },
+    SandboxMerged {
+        snapshot_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +88,9 @@ pub enum Event {
         id: SessionId,
         event: AgentEvent,
     },
+    OverlayDiffReady {
+        session_id: SessionId,
+    },
 }
 
 impl Event {
@@ -94,6 +103,7 @@ impl Event {
             Event::Resized { .. } => "Resized",
             Event::MetricsUpdated => "MetricsUpdated",
             Event::AgentEvent { .. } => "AgentEvent",
+            Event::OverlayDiffReady { .. } => "OverlayDiffReady",
         }
     }
 }
