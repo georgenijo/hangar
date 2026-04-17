@@ -103,7 +103,11 @@ fn test_stale_read_returns_error() {
     let result = ring.read_at(0, 50);
     assert!(result.is_err(), "expected error for stale read");
     let msg = result.unwrap_err().to_string();
-    assert!(msg.contains("overwritten"), "expected 'overwritten' in: {}", msg);
+    assert!(
+        msg.contains("overwritten"),
+        "expected 'overwritten' in: {}",
+        msg
+    );
 }
 
 #[test]

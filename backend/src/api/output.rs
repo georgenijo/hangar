@@ -37,7 +37,9 @@ pub async fn get_output(
     };
 
     let len = params.len.unwrap_or(65536);
-    let offset = params.offset.unwrap_or_else(|| ring.head().saturating_sub(len as u64));
+    let offset = params
+        .offset
+        .unwrap_or_else(|| ring.head().saturating_sub(len as u64));
     let current_head = ring.head();
     let capacity = ring.capacity();
 

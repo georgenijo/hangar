@@ -155,14 +155,12 @@ impl Session {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_millis() as i64;
 
-        sqlx::query(
-            "UPDATE sessions SET state = ?, last_activity_at = ? WHERE id = ?",
-        )
-        .bind(&state_str)
-        .bind(now)
-        .bind(&id_str)
-        .execute(pool)
-        .await?;
+        sqlx::query("UPDATE sessions SET state = ?, last_activity_at = ? WHERE id = ?")
+            .bind(&state_str)
+            .bind(now)
+            .bind(&id_str)
+            .execute(pool)
+            .await?;
 
         Ok(())
     }

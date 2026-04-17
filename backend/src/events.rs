@@ -59,15 +59,14 @@ impl EventStore {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_millis() as i64;
 
-        let result = sqlx::query(
-            "INSERT INTO events (session_id, ts, kind, body) VALUES (?, ?, ?, ?)",
-        )
-        .bind(session_id)
-        .bind(ts)
-        .bind(kind)
-        .bind(&body)
-        .execute(pool)
-        .await?;
+        let result =
+            sqlx::query("INSERT INTO events (session_id, ts, kind, body) VALUES (?, ?, ?, ?)")
+                .bind(session_id)
+                .bind(ts)
+                .bind(kind)
+                .bind(&body)
+                .execute(pool)
+                .await?;
 
         Ok(result.last_insert_rowid())
     }

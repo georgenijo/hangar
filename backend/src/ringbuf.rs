@@ -74,7 +74,11 @@ impl RingBuf {
     pub fn write(&mut self, data: &[u8]) -> Result<(u64, u32)> {
         let len = data.len();
         if len as u64 > self.capacity {
-            bail!("write ({} bytes) exceeds ring capacity ({} bytes)", len, self.capacity);
+            bail!(
+                "write ({} bytes) exceeds ring capacity ({} bytes)",
+                len,
+                self.capacity
+            );
         }
 
         let offset = self.head;
@@ -84,7 +88,8 @@ impl RingBuf {
             self.file.write_at(data, HEADER_SIZE + file_pos)?;
         } else {
             let first_len = (self.capacity - file_pos) as usize;
-            self.file.write_at(&data[..first_len], HEADER_SIZE + file_pos)?;
+            self.file
+                .write_at(&data[..first_len], HEADER_SIZE + file_pos)?;
             self.file.write_at(&data[first_len..], HEADER_SIZE)?;
         }
 
@@ -107,7 +112,11 @@ impl RingBuf {
         }
 
         if self.head > self.capacity && self.head - offset > self.capacity {
-            bail!("data at offset {} has been overwritten (head={})", offset, self.head);
+            bail!(
+                "data at offset {} has been overwritten (head={})",
+                offset,
+                self.head
+            );
         }
 
         let file_pos = offset % self.capacity;
@@ -117,7 +126,8 @@ impl RingBuf {
             self.file.read_at(&mut buf, HEADER_SIZE + file_pos)?;
         } else {
             let first_len = (self.capacity - file_pos) as usize;
-            self.file.read_at(&mut buf[..first_len], HEADER_SIZE + file_pos)?;
+            self.file
+                .read_at(&mut buf[..first_len], HEADER_SIZE + file_pos)?;
             self.file.read_at(&mut buf[first_len..], HEADER_SIZE)?;
         }
 
