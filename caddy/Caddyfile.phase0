@@ -1,0 +1,47 @@
+:8080 {
+	encode gzip
+
+	# per-session ttyd mounts (ttyd serves at its base path)
+	handle_path /s/codex* {
+		reverse_proxy localhost:7682
+	}
+	handle_path /s/wave* {
+		reverse_proxy localhost:7683
+	}
+	handle_path /s/issue12* {
+		reverse_proxy localhost:7684
+	}
+
+	# Phase 2.1 API proxy
+	handle /api/* {
+		reverse_proxy localhost:3000
+	}
+
+	# Phase 2.1 WebSocket proxy
+	handle /ws/* {
+		reverse_proxy localhost:3000
+	}
+
+	# Phase 2.7 ntfy push relay
+	handle_path /ntfy/* {
+		reverse_proxy localhost:2586
+	}
+
+	# Phase 2.1 static terminal UI
+	handle_path /v2/* {
+		root * /home/george/Documents/hangar/web/v2
+		file_server
+	}
+
+	# SvelteKit SPA dashboard
+	handle {
+		root * /home/george/Documents/hangar/frontend/build
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/dashboard.log
+		format console
+	}
+}
