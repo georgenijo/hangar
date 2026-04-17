@@ -12,6 +12,22 @@
 		reverse_proxy localhost:7684
 	}
 
+	# Phase 2.1 API proxy
+	handle /api/* {
+		reverse_proxy localhost:3000
+	}
+
+	# Phase 2.1 WebSocket proxy
+	handle /ws/* {
+		reverse_proxy localhost:3000
+	}
+
+	# Phase 2.1 static terminal UI
+	handle_path /v2/* {
+		root * /home/george/Documents/hangar/web/v2
+		file_server
+	}
+
 	# static dashboard
 	handle {
 		root * /home/george/Documents/hangar/web
