@@ -12,6 +12,7 @@ pub mod ringbuf;
 pub mod session;
 pub mod supervisor_client;
 pub mod supervisor_protocol;
+pub mod util;
 pub mod ws;
 
 use std::collections::HashMap;

@@ -99,6 +99,8 @@ export function kindLabel(k: SessionKind): string {
 			return 'Claude Code';
 		case 'raw_bytes':
 			return 'Raw Bytes';
+		case 'codex':
+			return 'Codex';
 	}
 }
 
@@ -115,5 +117,7 @@ export function kindIcon(k: SessionKind): string {
 			return 'bot';
 		case 'raw_bytes':
 			return 'binary';
+		case 'codex':
+			return 'bot';
 	}
 }

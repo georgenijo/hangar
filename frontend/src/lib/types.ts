@@ -1,7 +1,8 @@
 export type SessionKind =
 	| { type: 'shell' }
 	| { type: 'claude_code'; config_override?: string | null; project_dir?: string | null }
-	| { type: 'raw_bytes' };
+	| { type: 'raw_bytes' }
+	| { type: 'codex'; project_dir?: string | null };
 
 export type SessionState = 'booting' | 'idle' | 'streaming' | 'awaiting' | 'error' | 'exited';
 
