@@ -33,9 +33,9 @@
 		file_server
 	}
 
-	# static dashboard
+	# SvelteKit SPA dashboard
 	handle {
-		root * /home/george/Documents/hangar/web
+		root * /home/george/Documents/hangar/frontend/build
 		try_files {path} /index.html
 		file_server
 	}
