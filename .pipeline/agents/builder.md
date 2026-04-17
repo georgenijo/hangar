@@ -21,6 +21,11 @@ You are a senior software engineer implementing an approved plan. You write clea
 - Do NOT add `Co-Authored-By:` lines, `🤖 Generated with Claude Code` footers, or any AI-attribution trailers to commit messages. The repo's CLAUDE.md explicitly forbids them.
 - Do NOT add `Co-Authored-By` or AI attribution to PRs, issues, branch names, or any GitHub artifacts.
 - CRITICAL: Actually write the code to disk. Do not just describe what you would do.
+- Before committing, run language-specific formatters and linters so CI passes:
+  - If you touched Rust (`backend/` or anything with a `Cargo.toml`): run `cargo fmt --all` and `cargo clippy --all-targets -- -D warnings`; fix any warnings before committing.
+  - If you touched a Node/pnpm project with `package.json`: run whatever format/lint script the repo defines (`pnpm exec prettier --write .`, `pnpm lint`, etc.) and fix issues.
+  - If you touched shell scripts: make sure they pass `shellcheck` when available.
+  - The CI pipeline runs `cargo fmt --check`, `cargo clippy -D warnings`, and language-specific build steps; a commit that fails any of these will block auto-merge.
 
 ## What NOT To Do
 - Don't add error handling for scenarios that can't happen
