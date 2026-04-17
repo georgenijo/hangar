@@ -120,6 +120,10 @@ async fn reap_children(state: Arc<Mutex<SupervisorState>>) {
 }
 
 fn handle_client(mut stream: UnixStream, state: Arc<Mutex<SupervisorState>>) -> Result<()> {
+    // tokio::net::UnixStream::into_std() does NOT reset the fd to blocking mode;
+    // it just wraps the raw fd which tokio keeps non-blocking. Without this call,
+    // read_exact returns WouldBlock after the first response and closes the connection.
+    stream.set_nonblocking(false)?;
     loop {
         let frame = match read_frame(&mut stream) {
             Ok(f) => f,
