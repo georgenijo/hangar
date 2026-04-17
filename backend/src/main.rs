@@ -65,6 +65,17 @@ async fn main() -> Result<()> {
         supervisor,
     };
 
+    let config = hangard::config::load().unwrap_or_else(|e| {
+        warn!("config load failed: {e}, using defaults");
+        hangard::config::HangarConfig::default()
+    });
+    tokio::spawn(hangard::push::run(
+        app_state.event_bus.clone(),
+        app_state.db.clone(),
+        config.push,
+    ));
+    info!("push task spawned");
+
     let router = api::router(app_state);
 
     let port: u16 = std::env::var("HANGAR_PORT")

@@ -22,6 +22,11 @@
 		reverse_proxy localhost:3000
 	}
 
+	# Phase 2.7 ntfy push relay
+	handle_path /ntfy/* {
+		reverse_proxy localhost:2586
+	}
+
 	# Phase 2.1 static terminal UI
 	handle_path /v2/* {
 		root * /home/george/Documents/hangar/web/v2

@@ -53,3 +53,4 @@ What we chose.
 | 0013 | No auth for MVP — tailnet is the boundary | Accepted |
 | 0014 | Dashboard visibility is the killer feature | Accepted |
 | 0015 | MVP bundles backend + UI + push + REST into one release | Accepted |
+| 0016 | Self-host ntfy behind Caddy | Accepted |
