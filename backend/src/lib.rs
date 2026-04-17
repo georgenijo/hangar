@@ -4,6 +4,7 @@ pub mod config;
 pub mod db;
 pub mod drivers;
 pub mod events;
+pub mod logs;
 pub mod pty;
 pub mod push;
 pub mod raw_fd_master;
@@ -21,6 +22,7 @@ use std::time::Instant;
 use db::Db;
 use drivers::OobMessage;
 use events::EventBus;
+use logs::LogsHub;
 use supervisor_client::SupervisorClient;
 use tokio::sync::mpsc;
 
@@ -35,4 +37,5 @@ pub struct AppState {
     pub sessions: SessionRegistry,
     pub supervisor: Option<SupervisorClient>,
     pub start_time: Instant,
+    pub logs: Arc<LogsHub>,
 }

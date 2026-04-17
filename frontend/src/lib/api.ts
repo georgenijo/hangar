@@ -1,4 +1,4 @@
-import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind } from './types';
+import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind, LogSource } from './types';
 
 export class ApiError extends Error {
 	constructor(
@@ -100,6 +100,11 @@ export function kindLabel(k: SessionKind): string {
 		case 'raw_bytes':
 			return 'Raw Bytes';
 	}
+}
+
+export async function listLogSources(): Promise<LogSource[]> {
+	const res = await checkOk(await fetch('/api/v1/logs/sources'));
+	return res.json();
 }
 
 export function kindIcon(k: SessionKind): string {
