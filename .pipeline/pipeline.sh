@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-PROJECT_NAME="$(basename "$PROJECT_DIR")"
+PROJECT_NAME="${PROJECT_NAME_OVERRIDE:-$(basename "$PROJECT_DIR")}"
 LOGS_DIR="$HOME/Documents/pipeline-logs/$PROJECT_NAME/issue-$ISSUE_NUM"
 
 # --- Init ---
