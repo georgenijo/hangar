@@ -1,0 +1,26 @@
+:8080 {
+	encode gzip
+
+	# per-session ttyd mounts (ttyd serves at its base path)
+	handle_path /s/codex* {
+		reverse_proxy localhost:7682
+	}
+	handle_path /s/wave* {
+		reverse_proxy localhost:7683
+	}
+	handle_path /s/issue12* {
+		reverse_proxy localhost:7684
+	}
+
+	# static dashboard
+	handle {
+		root * /home/george/Documents/optiplex-dashboard/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/dashboard.log
+		format console
+	}
+}

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>optiplex dashboard</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 -apple-system, system-ui, sans-serif; background: #0e0e10; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 8px 14px; background: #16161a; border-bottom: 1px solid #2a2a30; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 14px; font-weight: 600; color: #8cf; }
+  header .status { font-size: 12px; color: #7c7; }
+  header .links { margin-left: auto; display: flex; gap: 10px; font-size: 12px; align-items: center; }
+  header .links a, header .links button { color: #9cf; text-decoration: none; background: none; border: 1px solid #2a2a30; padding: 3px 8px; border-radius: 4px; cursor: pointer; font: inherit; }
+  header .links button:hover, header .links a:hover { background: #22222a; }
+  .tabs { display: flex; background: #17171b; border-bottom: 1px solid #2a2a30; overflow-x: auto; align-items: stretch; }
+  .tabs button { background: none; border: none; color: #aaa; padding: 8px 14px; cursor: pointer; font: inherit; border-right: 1px solid #222; display: flex; align-items: center; gap: 6px; }
+  .tabs button.active { background: #22222a; color: #fff; border-bottom: 2px solid #6af; }
+  .tabs button:hover { background: #1f1f25; }
+  .tabs .badge { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #5c5; }
+  .tabs .reload { margin-left: 4px; opacity: 0.5; font-size: 11px; }
+  .tabs .reload:hover { opacity: 1; }
+  main { flex: 1; position: relative; background: #000; }
+  .pane { position: absolute; inset: 0; display: none; }
+  .pane.active { display: block; }
+  .pane iframe { width: 100%; height: 100%; border: 0; background: #000; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr; gap: 1px; background: #2a2a30; position: absolute; inset: 0; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr 1fr; } }
+  .grid .cell { background: #000; display: flex; flex-direction: column; min-width: 0; }
+  .grid .cell h3 { margin: 0; background: #16161a; padding: 4px 10px; font-size: 11px; color: #9cf; border-bottom: 1px solid #2a2a30; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .grid .cell h3 button { margin-left: auto; background: none; border: 0; color: #888; cursor: pointer; font-size: 12px; }
+  .grid .cell h3 button:hover { color: #fff; }
+  .grid .cell iframe { flex: 1; border: 0; }
+  footer { padding: 4px 14px; font-size: 11px; color: #666; background: #16161a; border-top: 1px solid #2a2a30; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🖥 optiplex</h1>
+  <span class="status" id="status">● live</span>
+  <div class="links">
+    <button onclick="reloadAll()" title="reload all panes">↻ all</button>
+    <a href="https://optiplex:9090/system" target="_blank">cockpit</a>
+  </div>
+</header>
+
+<div class="tabs" id="tabs"></div>
+
+<main id="main"></main>
+
+<footer>click pane to focus · ↻ reload if hung · ttyd -W write-enabled</footer>
+
+<script>
+  const SESSIONS = ['codex', 'wave', 'issue12'];
+
+  const tabs = document.getElementById('tabs');
+  const main = document.getElementById('main');
+
+  function makeTab(name, idx) {
+    const btn = document.createElement('button');
+    btn.dataset.pane = `p-${name}`;
+    if (idx === 0) btn.classList.add('active');
+    btn.innerHTML = `<span class="badge"></span>${name}<span class="reload" title="reload ${name}">↻</span>`;
+    btn.onclick = (e) => {
+      if (e.target.classList.contains('reload')) { reloadPane(name); return; }
+      selectTab(name);
+    };
+    tabs.appendChild(btn);
+  }
+
+  function makePane(name, idx) {
+    const div = document.createElement('div');
+    div.id = `p-${name}`;
+    div.className = 'pane' + (idx === 0 ? ' active' : '');
+    div.innerHTML = `<iframe id="f-${name}" src="/s/${name}/" allow="clipboard-read; clipboard-write"></iframe>`;
+    main.appendChild(div);
+  }
+
+  function makeGridTab() {
+    const btn = document.createElement('button');
+    btn.dataset.pane = 'p-grid';
+    btn.innerHTML = '⊞ grid';
+    btn.onclick = () => selectTab('grid');
+    tabs.appendChild(btn);
+
+    const div = document.createElement('div');
+    div.id = 'p-grid';
+    div.className = 'pane';
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    SESSIONS.forEach(n => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.innerHTML = `<h3>${n}<button onclick="reloadGrid('${n}')" title="reload">↻</button></h3><iframe id="g-${n}" src="/s/${n}/"></iframe>`;
+      grid.appendChild(cell);
+    });
+    div.appendChild(grid);
+    main.appendChild(div);
+  }
+
+  function selectTab(name) {
+    document.querySelectorAll('#tabs button').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+    document.querySelector(`[data-pane="p-${name}"]`).classList.add('active');
+    document.getElementById(`p-${name}`).classList.add('active');
+  }
+
+  function reloadPane(name) {
+    const f = document.getElementById(`f-${name}`);
+    f.src = f.src;
+  }
+  function reloadGrid(name) {
+    const f = document.getElementById(`g-${name}`);
+    f.src = f.src;
+  }
+  function reloadAll() {
+    SESSIONS.forEach(n => {
+      reloadPane(n);
+      reloadGrid(n);
+    });
+    document.getElementById('status').textContent = '● reloaded ' + new Date().toLocaleTimeString();
+    setTimeout(() => document.getElementById('status').textContent = '● live', 2000);
+  }
+
+  SESSIONS.forEach((n, i) => { makeTab(n, i); makePane(n, i); });
+  makeGridTab();
+</script>
+</body>
+</html>
