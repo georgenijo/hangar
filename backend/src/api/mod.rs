@@ -4,14 +4,16 @@ pub mod resize;
 pub mod sessions;
 
 use axum::{
+    extract::State,
     routing::{get, post},
-    Router,
+    Json, Router,
 };
 
 use crate::AppState;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .route("/api/v1/health", get(health))
         .route(
             "/api/v1/sessions",
             post(sessions::create_session).get(sessions::list_sessions),
@@ -22,4 +24,16 @@ pub fn router(state: AppState) -> Router {
         .route("/ws/v1/sessions/:id/pty", get(crate::ws::pty::ws_pty))
         .merge(crate::cc_hook_socket::hook_route())
         .with_state(state)
+}
+
+async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let supervisor_connected = state
+        .supervisor
+        .as_ref()
+        .map(|s| s.is_connected())
+        .unwrap_or(false);
+    Json(serde_json::json!({
+        "ok": true,
+        "supervisor_connected": supervisor_connected,
+    }))
 }

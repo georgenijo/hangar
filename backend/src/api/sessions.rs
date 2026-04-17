@@ -94,16 +94,31 @@ pub async fn create_session(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let active = pty::spawn_pty(
-        session_id.clone(),
-        spawn_cfg,
-        driver,
-        state.ring_dir.clone(),
-        state.event_bus.clone(),
-        state.db.pool().clone(),
-        (body.cols, body.rows),
-    )
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let active = if let Some(ref sup) = state.supervisor {
+        pty::spawn_pty_supervised(
+            sup,
+            session_id.clone(),
+            spawn_cfg,
+            driver,
+            state.ring_dir.clone(),
+            state.event_bus.clone(),
+            state.db.pool().clone(),
+            (body.cols, body.rows),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    } else {
+        pty::spawn_pty(
+            session_id.clone(),
+            spawn_cfg,
+            driver,
+            state.ring_dir.clone(),
+            state.event_bus.clone(),
+            state.db.pool().clone(),
+            (body.cols, body.rows),
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    };
 
     Session::update_state(state.db.pool(), &session_id, SessionState::Idle)
         .await

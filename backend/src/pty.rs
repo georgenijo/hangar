@@ -1,24 +1,60 @@
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use sqlx::SqlitePool;
+use std::os::unix::io::OwnedFd;
 use tokio::sync::broadcast;
 
-use crate::drivers::{AgentDriver, PtyHandle, SpawnCfg};
+use crate::drivers::{AgentDriver, SpawnCfg};
 use crate::events::{Event, EventBus};
+use crate::raw_fd_master::RawFdMaster;
 use crate::ringbuf::{RingBuf, DEFAULT_CAPACITY};
 use crate::session::{SessionId, SessionState};
 
+pub enum PtyMaster {
+    Local(Arc<Mutex<Box<dyn MasterPty + Send>>>),
+    Attached(Arc<Mutex<RawFdMaster>>),
+}
+
+impl PtyMaster {
+    pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {
+        match self {
+            PtyMaster::Local(m) => {
+                m.lock()
+                    .unwrap()
+                    .resize(PtySize {
+                        rows,
+                        cols,
+                        pixel_width: 0,
+                        pixel_height: 0,
+                    })
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                Ok(())
+            }
+            PtyMaster::Attached(m) => m.lock().unwrap().resize(cols, rows),
+        }
+    }
+}
+
+impl Clone for PtyMaster {
+    fn clone(&self) -> Self {
+        match self {
+            PtyMaster::Local(a) => PtyMaster::Local(Arc::clone(a)),
+            PtyMaster::Attached(a) => PtyMaster::Attached(Arc::clone(a)),
+        }
+    }
+}
+
 pub struct ActiveSession {
     pub session_id: SessionId,
-    pub master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
-    pub writer: Arc<Mutex<PtyHandle>>,
+    pub master: PtyMaster,
+    pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub output_tx: broadcast::Sender<Vec<u8>>,
     pub driver: Arc<Mutex<Box<dyn AgentDriver>>>,
-    pub child: Arc<Mutex<Box<dyn Child + Send>>>,
+    pub child: Option<Arc<Mutex<Box<dyn Child + Send>>>>,
     pub created_at: i64,
 }
 
@@ -52,7 +88,7 @@ pub fn spawn_pty(
     drop(pair.slave);
 
     let reader = pair.master.try_clone_reader()?;
-    let writer = pair.master.take_writer()?;
+    let writer: Box<dyn Write + Send> = pair.master.take_writer()?;
 
     let (output_tx, _) = broadcast::channel::<Vec<u8>>(256);
 
@@ -116,13 +152,133 @@ pub fn spawn_pty(
 
     Ok(ActiveSession {
         session_id,
-        master: Arc::new(Mutex::new(pair.master)),
-        writer: Arc::new(Mutex::new(PtyHandle::new(writer))),
+        master: PtyMaster::Local(Arc::new(Mutex::new(pair.master))),
+        writer: Arc::new(Mutex::new(writer)),
         output_tx,
         driver,
-        child: Arc::new(Mutex::new(child)),
+        child: Some(Arc::new(Mutex::new(child))),
         created_at,
     })
+}
+
+pub fn reattach(
+    session_id: SessionId,
+    master_fd: OwnedFd,
+    driver: Box<dyn AgentDriver>,
+    ring_dir: PathBuf,
+    event_bus: Arc<EventBus>,
+    db: SqlitePool,
+) -> Result<ActiveSession> {
+    let ring_path = ring_dir.join(session_id.as_ref()).join("output.bin");
+    let ring_buf = if ring_path.exists() {
+        RingBuf::open(&ring_path)?
+    } else {
+        if let Some(parent) = ring_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        RingBuf::create(&ring_path, DEFAULT_CAPACITY)?
+    };
+
+    let read_fd = master_fd.try_clone()?;
+    let write_fd = master_fd.try_clone()?;
+    let resize_fd = master_fd;
+
+    let (output_tx, _) = broadcast::channel::<Vec<u8>>(256);
+
+    let driver = Arc::new(Mutex::new(driver));
+    let driver_clone = Arc::clone(&driver);
+    let output_tx_clone = output_tx.clone();
+    let event_bus_clone = Arc::clone(&event_bus);
+    let sid = session_id.clone();
+
+    let mut reader = RawFdMaster::new(read_fd);
+    let mut ring_buf = ring_buf;
+
+    let reader_handle = std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    let chunk = buf[..n].to_vec();
+                    if let Ok((offset, len)) = ring_buf.write(&chunk) {
+                        event_bus_clone
+                            .send(sid.to_string(), Event::OutputAppended { offset, len });
+                    }
+                    let events = driver_clone.lock().unwrap().on_bytes(&chunk);
+                    for evt in events {
+                        event_bus_clone.send(
+                            sid.to_string(),
+                            Event::AgentEvent {
+                                id: sid.clone(),
+                                event: evt,
+                            },
+                        );
+                    }
+                    let _ = output_tx_clone.send(chunk);
+                }
+            }
+        }
+        let _ = ring_buf.sync();
+    });
+
+    let cleanup_sid = session_id.clone();
+    let cleanup_bus = Arc::clone(&event_bus);
+    tokio::spawn(async move {
+        let _ = tokio::task::spawn_blocking(move || reader_handle.join()).await;
+        let _ =
+            crate::session::Session::update_state(&db, &cleanup_sid, SessionState::Exited).await;
+        cleanup_bus.send(
+            cleanup_sid.to_string(),
+            Event::StateChanged {
+                from: SessionState::Idle,
+                to: SessionState::Exited,
+            },
+        );
+    });
+
+    let created_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    Ok(ActiveSession {
+        session_id,
+        master: PtyMaster::Attached(Arc::new(Mutex::new(RawFdMaster::new(resize_fd)))),
+        writer: Arc::new(Mutex::new(Box::new(RawFdMaster::new(write_fd)))),
+        output_tx,
+        driver,
+        child: None,
+        created_at,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn spawn_pty_supervised(
+    supervisor: &crate::supervisor_client::SupervisorClient,
+    session_id: SessionId,
+    spawn_cfg: SpawnCfg,
+    driver: Box<dyn AgentDriver>,
+    ring_dir: PathBuf,
+    event_bus: Arc<EventBus>,
+    db: SqlitePool,
+    initial_size: (u16, u16),
+) -> Result<ActiveSession> {
+    let cwd = spawn_cfg.cwd.display().to_string();
+    supervisor
+        .spawn_session(
+            session_id.to_string(),
+            spawn_cfg.command.clone(),
+            cwd,
+            spawn_cfg.env.clone(),
+            initial_size.0,
+            initial_size.1,
+        )
+        .await?;
+
+    let (_, fd) = supervisor.attach_fd(session_id.as_ref()).await?;
+
+    reattach(session_id, fd, driver, ring_dir, event_bus, db)
 }
 
 #[cfg(test)]
@@ -166,7 +322,6 @@ mod tests {
 
         let mut rx = active.output_tx.subscribe();
 
-        // Write a command
         active
             .writer
             .lock()
@@ -174,7 +329,6 @@ mod tests {
             .write_all(b"echo hello\r")
             .unwrap();
 
-        // Read with timeout
         let result = tokio::time::timeout(std::time::Duration::from_secs(5), async move {
             let mut collected = Vec::new();
             loop {
@@ -194,7 +348,6 @@ mod tests {
 
         assert!(result.unwrap_or(false), "expected 'hello' in PTY output");
 
-        // Clean exit
         active.writer.lock().unwrap().write_all(b"exit\r").unwrap();
     }
 }
