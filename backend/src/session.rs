@@ -179,6 +179,18 @@ impl Session {
         row.map(Session::from_row).transpose()
     }
 
+    pub async fn get_by_id_or_slug(pool: &SqlitePool, id_or_slug: &str) -> Result<Option<Session>> {
+        let row = sqlx::query_as::<_, SessionRow>(
+            "SELECT id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit
+             FROM sessions WHERE id = ?1 OR (slug = ?1 AND node_id = 'local') LIMIT 1",
+        )
+        .bind(id_or_slug)
+        .fetch_optional(pool)
+        .await?;
+
+        row.map(Session::from_row).transpose()
+    }
+
     pub async fn update_state(
         pool: &SqlitePool,
         id: &SessionId,

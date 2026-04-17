@@ -1,15 +1,22 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use std::time::Duration;
 
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    Json,
+};
 use regex::Regex;
 use serde::Deserialize;
 
-use crate::drivers::{DriverRegistry, SpawnRequest};
+use crate::api::{resolve_session, WriterLock};
+use crate::drivers::{DriverRegistry, PtyHandle, SpawnRequest};
 use crate::events::Event;
 use crate::pty;
 use crate::session::{Session, SessionId, SessionKind, SessionState};
 use crate::AppState;
+use sqlx;
 
 static SLUG_RE: OnceLock<Regex> = OnceLock::new();
 
@@ -147,4 +154,112 @@ pub async fn list_sessions(
         .await
         .map(Json)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+pub async fn get_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Session>, StatusCode> {
+    let session = resolve_session(&state, &id).await?;
+    Ok(Json(session))
+}
+
+#[derive(Deserialize)]
+pub struct PatchSessionRequest {
+    pub slug: Option<String>,
+    pub labels: Option<serde_json::Value>,
+}
+
+pub async fn patch_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<PatchSessionRequest>,
+) -> Result<Json<Session>, StatusCode> {
+    let session = resolve_session(&state, &id).await?;
+    let ulid = session.id.to_string();
+
+    if let Some(ref slug) = body.slug {
+        if !slug_re().is_match(slug) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    if let Some(ref labels) = body.labels {
+        if !labels.is_object() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    let new_slug = body.slug.as_deref().map(|s| s.to_string());
+    let new_labels = body.labels.as_ref().map(|v| v.to_string());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    let result = sqlx::query(
+        "UPDATE sessions SET slug = COALESCE(?1, slug), labels = COALESCE(?2, labels), last_activity_at = ?3 WHERE id = ?4",
+    )
+    .bind(&new_slug)
+    .bind(&new_labels)
+    .bind(now)
+    .bind(&ulid)
+    .execute(state.db.pool())
+    .await;
+
+    match result {
+        Err(sqlx::Error::Database(dbe)) if dbe.is_unique_violation() => {
+            return Err(StatusCode::CONFLICT);
+        }
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Ok(_) => {}
+    }
+
+    let updated = Session::get_by_id_or_slug(state.db.pool(), &ulid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    Ok(Json(updated))
+}
+
+pub async fn delete_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    let session = resolve_session(&state, &id).await?;
+    let ulid = session.id.to_string();
+
+    let active = {
+        let mut sessions = state.sessions.write().unwrap();
+        sessions.remove(&ulid)
+    };
+
+    if let Some(active) = active {
+        let writer_clone = std::sync::Arc::clone(&active.writer);
+        let mut handle = PtyHandle::new(Box::new(WriterLock(writer_clone)));
+        let _ = active
+            .driver
+            .lock()
+            .unwrap()
+            .shutdown(&mut handle, Duration::from_secs(5));
+    }
+
+    if let Some(ref sup) = state.supervisor {
+        let _ = sup.kill(&ulid, libc::SIGTERM).await;
+    }
+
+    Session::update_state(state.db.pool(), &session.id, SessionState::Exited)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    state.event_bus.send(
+        ulid,
+        Event::StateChanged {
+            from: session.state,
+            to: SessionState::Exited,
+        },
+    );
+
+    Ok(StatusCode::NO_CONTENT)
 }

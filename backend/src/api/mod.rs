@@ -1,15 +1,41 @@
+pub mod broadcast;
 pub mod events;
+pub mod key;
+pub mod metrics;
 pub mod output;
+pub mod prompt;
 pub mod resize;
 pub mod sessions;
 
 use axum::{
     extract::State,
+    http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 
+use crate::session::Session;
 use crate::AppState;
+
+pub struct WriterLock(pub Arc<Mutex<Box<dyn Write + Send>>>);
+
+impl Write for WriterLock {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.lock().unwrap().flush()
+    }
+}
+
+pub async fn resolve_session(state: &AppState, id_or_slug: &str) -> Result<Session, StatusCode> {
+    Session::get_by_id_or_slug(state.db.pool(), id_or_slug)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)
+}
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -18,9 +44,19 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/sessions",
             post(sessions::create_session).get(sessions::list_sessions),
         )
+        .route(
+            "/api/v1/sessions/:id",
+            get(sessions::get_session)
+                .patch(sessions::patch_session)
+                .delete(sessions::delete_session),
+        )
         .route("/api/v1/sessions/:id/resize", post(resize::resize_session))
         .route("/api/v1/sessions/:id/output", get(output::get_output))
         .route("/api/v1/sessions/:id/events", get(events::get_events))
+        .route("/api/v1/sessions/:id/prompt", post(prompt::prompt_session))
+        .route("/api/v1/sessions/:id/key", post(key::send_key))
+        .route("/api/v1/broadcast", post(broadcast::broadcast))
+        .route("/api/v1/metrics", get(metrics::get_metrics))
         .route("/ws/v1/sessions/:id/pty", get(crate::ws::pty::ws_pty))
         .merge(crate::cc_hook_socket::hook_route())
         .with_state(state)
@@ -33,7 +69,9 @@ async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
         .map(|s| s.is_connected())
         .unwrap_or(false);
     Json(serde_json::json!({
-        "ok": true,
+        "status": "ok",
+        "version": env!("CARGO_PKG_VERSION"),
+        "uptime_s": state.start_time.elapsed().as_secs(),
         "supervisor_connected": supervisor_connected,
     }))
 }

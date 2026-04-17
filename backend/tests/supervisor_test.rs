@@ -105,7 +105,10 @@ fn read_until(fd: std::os::unix::io::RawFd, needle: &str, timeout: Duration) -> 
 fn base_env() -> HashMap<String, String> {
     let mut m = HashMap::new();
     m.insert("TERM".into(), "xterm".into());
-    m.insert("HOME".into(), std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()));
+    m.insert(
+        "HOME".into(),
+        std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()),
+    );
     m
 }
 
@@ -146,11 +149,7 @@ fn test_spawn_attach_kill_cycle() {
         &mut stream,
         &SupervisorRequest::Spawn {
             session_id: session_id.clone(),
-            command: vec![
-                "bash".into(),
-                "--norc".into(),
-                "--noprofile".into(),
-            ],
+            command: vec!["bash".into(), "--norc".into(), "--noprofile".into()],
             cwd: "/tmp".into(),
             env: base_env(),
             cols: 80,
@@ -178,9 +177,10 @@ fn test_spawn_attach_kill_cycle() {
     }
 
     // 3. AttachFd — receive PTY master fd via SCM_RIGHTS
-    let bytes =
-        serde_json::to_vec(&SupervisorRequest::AttachFd { session_id: session_id.clone() })
-            .unwrap();
+    let bytes = serde_json::to_vec(&SupervisorRequest::AttachFd {
+        session_id: session_id.clone(),
+    })
+    .unwrap();
     write_frame(&mut stream, &bytes).unwrap();
     let frame = read_frame(&mut stream).unwrap();
     let attach_resp: SupervisorResponse = serde_json::from_slice(&frame).unwrap();
@@ -193,7 +193,11 @@ fn test_spawn_attach_kill_cycle() {
 
     // 4. PTY I/O: write echo command, read back output
     nix::unistd::write(&master_fd, b"echo hangar_test_ok\n").expect("write to PTY failed");
-    let output = read_until(master_fd.as_raw_fd(), "hangar_test_ok", Duration::from_secs(3));
+    let output = read_until(
+        master_fd.as_raw_fd(),
+        "hangar_test_ok",
+        Duration::from_secs(3),
+    );
     assert!(
         output.contains("hangar_test_ok"),
         "PTY output did not contain expected string; got: {:?}",
@@ -271,7 +275,11 @@ fn test_list_empty() {
     let resp = send_recv(&mut stream, &SupervisorRequest::List);
     match resp {
         SupervisorResponse::SessionList { sessions } => {
-            assert!(sessions.is_empty(), "expected empty list, got {:?}", sessions);
+            assert!(
+                sessions.is_empty(),
+                "expected empty list, got {:?}",
+                sessions
+            );
         }
         other => panic!("expected SessionList, got {:?}", other),
     }
