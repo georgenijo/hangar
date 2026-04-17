@@ -1,0 +1,14 @@
+[Unit]
+Description=ntfy push relay
+After=network.target
+Before=hangar.service
+
+[Service]
+Type=simple
+User=george
+ExecStart=/usr/bin/ntfy serve
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
