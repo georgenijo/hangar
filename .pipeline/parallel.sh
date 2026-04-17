@@ -19,6 +19,7 @@ PROJECT_DIR="$(pwd)"
 ISSUES=""
 CONCURRENT=3
 STAGGER_SECONDS=30
+DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,6 +27,7 @@ while [[ $# -gt 0 ]]; do
     --issues)       ISSUES="$2"; shift 2 ;;
     --concurrent)   CONCURRENT="$2"; shift 2 ;;
     --stagger)      STAGGER_SECONDS="$2"; shift 2 ;;
+    --dry-run)      DRY_RUN=true; shift ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -40,7 +42,9 @@ WORKTREE_ROOT="$(dirname "$PROJECT_DIR")/${PROJECT_NAME}.worktrees"
 LOGS_DIR="$HOME/Documents/pipeline-logs/$PROJECT_NAME"
 TMUX_PREFIX="hangar-pipe"
 
-mkdir -p "$WORKTREE_ROOT" "$LOGS_DIR"
+if [[ "$DRY_RUN" == false ]]; then
+  mkdir -p "$WORKTREE_ROOT" "$LOGS_DIR"
+fi
 
 IFS=',' read -ra QUEUE <<< "$ISSUES"
 
@@ -66,6 +70,15 @@ dispatch_one() {
   local wt="$WORKTREE_ROOT/issue-$issue"
   local session="${TMUX_PREFIX}-$issue"
   local pipe_log="$LOGS_DIR/parallel-$issue.log"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    echo "  [DRY] issue #$issue would:"
+    echo "        git worktree add --detach '$wt' origin/main"
+    echo "        tmux new-session -d -s '$session' ..."
+    echo "        invoke '$SCRIPT_DIR/pipeline.sh' '$issue' --project-dir '$wt'"
+    echo "        log -> $pipe_log"
+    return
+  fi
 
   # Already running?
   if tmux has-session -t "$session" 2>/dev/null; then
@@ -99,15 +112,23 @@ dispatch_one() {
 
 # Main scheduling loop
 for issue in "${QUEUE[@]}"; do
-  while [[ "$(running_count)" -ge "$CONCURRENT" ]]; do
-    echo "  throttled: $(running_count) running ($(running_sessions))"
-    sleep 10
-  done
+  if [[ "$DRY_RUN" == false ]]; then
+    while [[ "$(running_count)" -ge "$CONCURRENT" ]]; do
+      echo "  throttled: $(running_count) running ($(running_sessions))"
+      sleep 10
+    done
+  fi
   dispatch_one "$issue"
-  if [[ "$issue" != "${QUEUE[-1]}" ]]; then
+  if [[ "$DRY_RUN" == false && "$issue" != "${QUEUE[-1]}" ]]; then
     sleep "$STAGGER_SECONDS"
   fi
 done
+
+if [[ "$DRY_RUN" == true ]]; then
+  echo
+  echo "=== DRY RUN — nothing was spawned or modified ==="
+  exit 0
+fi
 
 echo
 echo "All $((${#QUEUE[@]})) issues dispatched. Waiting for completion..."
