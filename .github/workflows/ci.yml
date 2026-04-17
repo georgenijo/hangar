@@ -94,7 +94,15 @@ jobs:
         if: steps.check.outputs.present == 'true'
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+      - name: check
+        if: steps.check.outputs.present == 'true'
+        working-directory: frontend
+        run: pnpm run check
       - name: build
         if: steps.check.outputs.present == 'true'
         working-directory: frontend
         run: pnpm build
+      - name: bundle-size
+        if: steps.check.outputs.present == 'true'
+        working-directory: frontend
+        run: node scripts/check-bundle-size.mjs
