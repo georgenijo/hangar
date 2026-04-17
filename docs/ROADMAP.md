@@ -60,7 +60,7 @@ NOW ─── tailnet-only stopgap dashboard (Phase 0) ✅
 Each phase has its own `docs/phases/<NN>-*.md` with explicit acceptance criteria. In one line:
 
 - **0** · Dashboard loads over tailnet, shows 3 tmux sessions as iframes, reload buttons work
-- **1** · `optiplex.<domain>` reaches the dashboard over HTTPS with SSO; phone loads it
+- **1** · `optiplex.georgenijo.com` reaches the dashboard over HTTPS with SSO; phone loads it
 - **2** · New backend runs; ttyd retired; SvelteKit UI shows Claude sessions as chat; can prompt over REST; push alerts on `awaiting`
 - **3** · `/logs` page streams journald + unit + app logs with filters
 - **4** · Codex driver matches Claude; dashboard shows model/tokens/idle-time per tile

@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/SESSION-PROTOCOL.md` — session lifecycle and agent driver spec
   - `docs/decisions/0001..0015-*.md` — ADRs covering major architectural choices
 - `CHANGELOG.md` (this file)
+- Phase 1: Cloudflare Tunnel + Access for public HTTPS
+  - Named tunnel `hangar` → `https://optiplex.georgenijo.com/`
+  - Cloudflare Access SSO gate (single-email allowlist)
+  - Systemd unit `cloudflared-hangar.service`
+  - Deploy script `scripts/deploy-tunnel.sh`
 
 ### Changed
 - Renamed repo + working directory on the box from `optiplex-dashboard` to `hangar`

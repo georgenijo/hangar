@@ -122,7 +122,7 @@ The PR waits for CI to go green, then squash-merges. If CI fails, PR stays open 
 
 After Phase 2 ships:
 
-- Public dashboard: `https://optiplex.<domain>/` (Phase 1 tunnel)
+- Public dashboard: `https://optiplex.georgenijo.com/` (Phase 1 tunnel)
 - Tailnet dashboard: `http://optiplex:8080/`
 - Push notifications: subscribe on phone to the ntfy topic in `~/.config/hangar/config.toml`
 - Logs: `journalctl -u hangar -f`

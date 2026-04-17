@@ -1,0 +1,15 @@
+[Unit]
+Description=Cloudflare Tunnel: hangar → optiplex.georgenijo.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=george
+Group=george
+ExecStart=/usr/local/bin/cloudflared tunnel --config /etc/cloudflared/hangar.yml run hangar
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

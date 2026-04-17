@@ -11,3 +11,6 @@ frontend/node_modules/
 .local/
 hangar.db
 hangar.db-*
+
+# Cloudflare tunnel credentials (contains tunnel secret)
+*.credentials.json

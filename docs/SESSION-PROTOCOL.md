@@ -294,7 +294,7 @@ Output ring files live at `~/.local/state/hangar/sessions/<id>/output.bin`. Back
 - **`slug`**: short human label. Must match `^[a-z][a-z0-9-]{0,31}$`.
 - **URL form**: `/session/<slug>-<first 6 chars of id>` for human-friendly + stable-across-rename.
 - **Node ID** (Phase 10+): `optiplex`, `laptop`, etc. Always `local` for Phase 2.
-- **Shared tunnel hostname** (Phase 1+): `optiplex.<domain>.com`.
+- **Shared tunnel hostname** (Phase 1+): `optiplex.georgenijo.com`.
 
 ---
 
