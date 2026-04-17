@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tracing::info;
 
 use hangard::{api, db::Db, events::EventBus, AppState};
@@ -30,6 +30,7 @@ async fn main() -> Result<()> {
         event_bus,
         ring_dir: sessions_dir,
         hook_channels: Arc::new(Mutex::new(HashMap::new())),
+        sessions: Arc::new(RwLock::new(HashMap::new())),
     };
 
     let router = api::router(app_state);
@@ -37,7 +38,7 @@ async fn main() -> Result<()> {
     let port: u16 = std::env::var("HANGAR_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
-        .unwrap_or(4321);
+        .unwrap_or(3000);
 
     let addr = format!("127.0.0.1:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;

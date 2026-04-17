@@ -109,7 +109,28 @@ pub struct Session {
     pub exit: Option<ExitInfo>,
 }
 
+impl SessionKind {
+    pub fn driver_kind(&self) -> &str {
+        match self {
+            SessionKind::Shell => "shell",
+            SessionKind::ClaudeCode { .. } => "claude_code",
+            SessionKind::RawBytes => "raw_bytes",
+        }
+    }
+}
+
 impl Session {
+    pub async fn list(pool: &SqlitePool) -> Result<Vec<Session>> {
+        let rows = sqlx::query_as::<_, SessionRow>(
+            "SELECT id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit
+             FROM sessions ORDER BY created_at DESC",
+        )
+        .fetch_all(pool)
+        .await?;
+
+        rows.into_iter().map(Session::from_row).collect()
+    }
+
     pub async fn insert(&self, pool: &SqlitePool) -> Result<()> {
         let id = self.id.to_string();
         let kind = serde_json::to_string(&self.kind)?;
