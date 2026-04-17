@@ -1,0 +1,17 @@
+[Unit]
+Description=Hangar Supervisor (PTY holder)
+After=network.target
+
+[Service]
+Type=simple
+User=george
+Group=george
+ExecStart=/home/george/.cargo/bin/hangar-supervisor
+Restart=on-failure
+RestartSec=3
+KillMode=process
+TimeoutStopSec=10
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

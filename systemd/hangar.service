@@ -1,0 +1,16 @@
+[Unit]
+Description=Hangar Backend (hangard)
+After=network.target hangar-supervisor.service
+Requires=hangar-supervisor.service
+
+[Service]
+Type=simple
+User=george
+Group=george
+ExecStart=/home/george/.cargo/bin/hangard
+Restart=on-failure
+RestartSec=3
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

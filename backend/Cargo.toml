@@ -1,0 +1,39 @@
+[package]
+name = "hangar-backend"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "hangard"
+path = "src/bin/hangard.rs"
+
+[[bin]]
+name = "hangar-supervisor"
+path = "src/bin/hangar-supervisor.rs"
+
+[[bin]]
+name = "fd_pass_demo"
+path = "src/bin/fd_pass_demo.rs"
+required-features = ["dev-tools"]
+
+[features]
+dev-tools = []
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+nix = { version = "0.29", features = ["socket", "uio", "process", "signal", "fs", "ioctl", "term"] }
+base64 = "0.22"
+uuid = { version = "1", features = ["v4", "serde"] }
+libc = "0.2"
+portable-pty = "0.8"
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
