@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-17
+
+### Added
+
+- `hangard` Rust backend: Tokio/Axum HTTP server, session CRUD, PTY ownership via `portable-pty`, SQLite + 100 MB ring-buffer persistence, event broadcast bus
+- `hangar-supervisor` binary: holds PTY fds across backend restarts via Unix socket handoff
+- SvelteKit SPA dashboard: command-center tile view, session detail (chat UI for Claude Code, xterm.js for shell/raw), WebSocket live updates with exponential backoff
+- ntfy push integration: rule engine triggers phone notification when Claude session transitions to `Awaiting`
+- `POST /api/v1/sessions/:id/prompt` — send prompt to Claude session from anywhere
+- `POST /api/v1/broadcast` — send text to N sessions
+- `GET /api/v1/metrics` — JSON with `sessions_active`, `tokens_today`, `rss_mb`, `uptime_s`
+- `systemd/hangar.service` and `systemd/hangar-supervisor.service` — supervised restart-on-failure
+- `scripts/deploy.sh backend` subcommand: `git pull → cargo build → pnpm build → systemctl restart hangar`
+- ADR `0016-self-host-ntfy-behind-caddy.md`
+
+### Changed
+
+- `caddy/Caddyfile`: routes `/api/*` and `/ws/*` to `hangard :3000`; SvelteKit SPA serves at `/`
+- `scripts/deploy.sh` converted to subcommand dispatcher (`backend` / `phase0` / `help`)
+- `docs/phases/02-mvp-command-center.md` marked ✅ Complete
+
+### Removed
+
+- Phase 0 ttyd stopgap: `ttyd-codex`, `ttyd-wave`, `ttyd-issue12` systemd units deleted from repo and disabled on box
+- `/s/codex`, `/s/wave`, `/s/issue12` Caddy routes
+- `/v2/*` Caddy route and `web/v2/` static Phase 2.1 interim UI (superseded by SvelteKit SPA)
+- Ports 7682–7684 no longer in use
+
 ### Added
 - Phase 0: ttyd-based stopgap dashboard at `http://optiplex:8080`
   - Caddy reverse-proxy `/s/<name>` → ttyd ports (7682-7684)
@@ -36,4 +64,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rich Codex driver (uses raw-bytes fallback until Phase 4)
 - Sandboxing (Phase 6)
 
-[Unreleased]: https://github.com/georgenijo/hangar/compare/e5ec0de...HEAD
+[Unreleased]: https://github.com/georgenijo/hangar/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/georgenijo/hangar/compare/e5ec0de...v0.2.0
