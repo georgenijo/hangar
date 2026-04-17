@@ -3,3 +3,11 @@ node_modules/
 *.log
 .env
 .DS_Store
+pipeline-logs/
+backend/target/
+frontend/.svelte-kit/
+frontend/build/
+frontend/node_modules/
+.local/
+hangar.db
+hangar.db-*

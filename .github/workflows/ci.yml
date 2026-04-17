@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docs:
+    name: Docs sanity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check markdown link references
+        run: |
+          # Fail only on broken same-repo references (no external link checks).
+          set -e
+          missing=0
+          while IFS= read -r file; do
+            while IFS= read -r ref; do
+              target="$(echo "$ref" | sed 's|^.*(||;s|)$||;s|#.*$||')"
+              [[ -z "$target" ]] && continue
+              [[ "$target" =~ ^https?:// ]] && continue
+              [[ "$target" =~ ^mailto: ]] && continue
+              # Resolve relative to the file's dir
+              dir="$(dirname "$file")"
+              abs="$dir/$target"
+              if [[ ! -e "$abs" ]]; then
+                echo "  BROKEN: $file -> $target"
+                missing=$((missing + 1))
+              fi
+            done < <(grep -Eo '\]\([^)]+\)' "$file" || true)
+          done < <(find docs README.md CHANGELOG.md -name '*.md' -type f 2>/dev/null)
+          if [[ $missing -gt 0 ]]; then
+            echo "::error::$missing broken internal doc link(s)"
+            exit 1
+          fi
+          echo "All internal doc links resolve."
+
+  backend:
+    name: Backend (Rust)
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('backend/Cargo.toml') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - name: cargo fmt
+        working-directory: backend
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        working-directory: backend
+        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo test
+        working-directory: backend
+        run: cargo test --all
+
+  frontend:
+    name: Frontend (SvelteKit)
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('frontend/package.json') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: install
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: svelte-check
+        working-directory: frontend
+        run: pnpm exec svelte-check --fail-on-warnings
+      - name: build
+        working-directory: frontend
+        run: pnpm build
