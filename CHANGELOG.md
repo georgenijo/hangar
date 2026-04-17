@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/v2/*` Caddy route and `web/v2/` static Phase 2.1 interim UI (superseded by SvelteKit SPA)
 - Ports 7682–7684 no longer in use
 
+## [0.1.0]
+
 ### Added
 - Phase 0: ttyd-based stopgap dashboard at `http://optiplex:8080`
   - Caddy reverse-proxy `/s/<name>` → ttyd ports (7682-7684)
