@@ -14,7 +14,7 @@
 
 	# static dashboard
 	handle {
-		root * /home/george/Documents/optiplex-dashboard/web
+		root * /home/george/Documents/hangar/web
 		try_files {path} /index.html
 		file_server
 	}

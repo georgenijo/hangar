@@ -1,4 +1,4 @@
-# optiplex-dashboard
+# hangar
 
 Web control panel for tmux sessions + system health on the Optiplex box.
 
@@ -25,7 +25,7 @@ scripts/deploy.sh        install units, reload caddy
 ## Deploy (on the box)
 
 ```
-cd ~/Documents/optiplex-dashboard
+cd ~/Documents/hangar
 ./scripts/deploy.sh
 ```
 
