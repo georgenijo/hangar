@@ -1,6 +1,6 @@
 # Phase 2 — MVP Command Center
 
-**Status:** ⬜ Planned (largest phase)
+**Status:** ✅ Complete
 
 ## Goal
 
@@ -120,8 +120,16 @@ Each milestone should be a PR with its own tests.
 
 1. Phase 0 continues to serve at `http://optiplex:8080` on `/s/<name>` during the whole Phase 2 build
 2. Once backend is running in parallel on `localhost:3000`, Caddy routes `/api` + `/ws` to it and serves the new Svelte build at `/`
-3. After all acceptance criteria met and Phase 0 routes unused for a week, remove the ttyd systemd units and the `/s/<name>` Caddy block
-4. Commit removal in a separate PR with CHANGELOG entry
+3. ✅ ttyd units disabled and removed (Phase 2.8). `/s/<name>` Caddy blocks stripped. See CHANGELOG v0.2.0.
+4. ✅ ttyd units disabled and removed (Phase 2.8). `/s/<name>` Caddy blocks stripped. See CHANGELOG v0.2.0.
+
+### Session Migration Status (Phase 2.8)
+
+| Session slug | Outcome |
+|---|---|
+| `codex` | Migrated to hangar shell session wrapping `tmux attach -t codex` |
+| `wave` | Migrated to hangar shell session wrapping `tmux attach -t wave` |
+| `issue12` | Migrated to hangar shell session wrapping `tmux attach -t issue12` |
 
 ## Rollback
 
