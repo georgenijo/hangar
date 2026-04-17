@@ -1,4 +1,4 @@
-import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind } from './types';
+import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind, SearchResult } from './types';
 
 export class ApiError extends Error {
 	constructor(
@@ -100,6 +100,25 @@ export function kindLabel(k: SessionKind): string {
 		case 'raw_bytes':
 			return 'Raw Bytes';
 	}
+}
+
+export async function search(opts: {
+	q: string;
+	sessionIds?: string[];
+	kinds?: string[];
+	limit?: number;
+	offset?: number;
+	signal?: AbortSignal;
+}): Promise<SearchResult[]> {
+	const params = new URLSearchParams();
+	params.set('q', opts.q);
+	if (opts.sessionIds?.length) params.set('session_ids', opts.sessionIds.join(','));
+	if (opts.kinds?.length) params.set('kinds', opts.kinds.join(','));
+	if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+	if (opts.offset !== undefined) params.set('offset', String(opts.offset));
+	const qs = params.toString();
+	const res = await checkOk(await fetch(`/api/v1/search?${qs}`, { signal: opts.signal }));
+	return res.json();
 }
 
 export function kindIcon(k: SessionKind): string {

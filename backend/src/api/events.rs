@@ -45,7 +45,8 @@ pub async fn get_events(
     }
 
     let since = params.since.unwrap_or(0);
-    let limit = params.limit.unwrap_or(100).min(1000);
+    // raised from 1000 to support replay — full session fetch
+    let limit = params.limit.unwrap_or(100).min(50_000);
     let kind = params.kind.as_deref();
 
     match EventStore::query(pool, &id, since, kind, limit).await {

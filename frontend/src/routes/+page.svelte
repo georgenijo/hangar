@@ -1,16 +1,44 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import SessionTile from '$lib/components/SessionTile.svelte';
+	import SearchPanel from '$lib/components/SearchPanel.svelte';
+	import type { SearchResult } from '$lib/types';
 
 	let spawnOpen = $state(false);
+	let searchOpen = $state(false);
 
 	function openSpawn() {
 		spawnOpen = true;
 		dispatchEvent(new CustomEvent('hangar:open-spawn'));
 	}
+
+	function handleSearchResultClick(result: SearchResult) {
+		goto(`/session/${result.session_id}/replay?t=${result.ts}`);
+	}
 </script>
 
 <div class="grid-page">
+	<div class="page-toolbar">
+		<button
+			class="btn-icon"
+			class:active={searchOpen}
+			onclick={() => (searchOpen = !searchOpen)}
+			title="Search events"
+		>
+			🔍
+		</button>
+	</div>
+
+	{#if searchOpen}
+		<div class="search-section">
+			<SearchPanel
+				sessions={sessionsStore.sessions}
+				onResultClick={handleSearchResultClick}
+			/>
+		</div>
+	{/if}
+
 	{#if sessionsStore.error}
 		<div class="banner error">
 			{sessionsStore.error}
@@ -41,6 +69,32 @@
 <style>
 	.grid-page {
 		padding: 16px;
+	}
+
+	.page-toolbar {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: 12px;
+	}
+
+	.btn-icon {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 1rem;
+		padding: 4px 10px;
+	}
+
+	.btn-icon:hover,
+	.btn-icon.active {
+		border-color: var(--accent);
+		color: var(--text);
+	}
+
+	.search-section {
+		margin-bottom: 16px;
 	}
 
 	.grid {

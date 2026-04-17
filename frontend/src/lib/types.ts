@@ -87,3 +87,19 @@ export interface CreateSessionRequest {
 	cols?: number;
 	rows?: number;
 }
+
+export interface SearchResult {
+	event_id: number;
+	session_id: string;
+	ts: number;
+	kind: string;
+	snippet: string;
+	score: number;
+}
+
+export interface ReplayEvent {
+	id: number;
+	ts: number;
+	kind: string;
+	event: Event;
+}
