@@ -1,12 +1,14 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::Instant;
 use tracing::{info, warn};
 
 use hangard::{api, db::Db, events::EventBus, session::SessionState, AppState};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let start_time = Instant::now();
     tracing_subscriber::fmt::init();
 
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home dir"))?;
@@ -63,6 +65,7 @@ async fn main() -> Result<()> {
         hook_channels: Arc::new(Mutex::new(HashMap::new())),
         sessions: sessions_registry,
         supervisor,
+        start_time,
     };
 
     let config = hangard::config::load().unwrap_or_else(|e| {

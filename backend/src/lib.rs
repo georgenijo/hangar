@@ -16,6 +16,7 @@ pub mod ws;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::Instant;
 
 use db::Db;
 use drivers::OobMessage;
@@ -33,4 +34,5 @@ pub struct AppState {
     pub hook_channels: Arc<Mutex<HashMap<String, mpsc::Sender<OobMessage>>>>,
     pub sessions: SessionRegistry,
     pub supervisor: Option<SupervisorClient>,
+    pub start_time: Instant,
 }

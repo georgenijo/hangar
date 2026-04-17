@@ -1,0 +1,591 @@
+openapi: 3.1.0
+info:
+  title: Hangar API
+  version: 0.1.0
+  description: |
+    REST API for hangard — a session manager for PTY-based agent processes.
+
+    All `{id}` path parameters accept either a ULID (26-char uppercase) or a
+    human-readable slug (e.g. `my-claude-session`).
+
+    WebSocket endpoint (not formally described in OpenAPI 3.1):
+      `GET /ws/v1/sessions/{id}/pty` — streams raw PTY output and accepts input.
+
+servers:
+  - url: http://127.0.0.1:3000
+    description: Local hangard instance
+
+paths:
+  /api/v1/health:
+    get:
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/sessions:
+    get:
+      summary: List all sessions
+      operationId: listSessions
+      responses:
+        "200":
+          description: Array of sessions ordered by created_at descending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+        "500":
+          description: Internal server error
+    post:
+      summary: Create a new session
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          description: Invalid slug or kind
+        "409":
+          description: Slug already in use on this node
+        "500":
+          description: Internal server error
+
+  /api/v1/sessions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Session ULID or slug
+        schema:
+          type: string
+    get:
+      summary: Get a single session
+      operationId: getSession
+      responses:
+        "200":
+          description: Session record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Session not found
+        "500":
+          description: Internal server error
+    patch:
+      summary: Update session slug and/or labels
+      operationId: patchSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchSessionRequest"
+      responses:
+        "200":
+          description: Updated session record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          description: Invalid slug format or labels not an object
+        "404":
+          description: Session not found
+        "409":
+          description: Slug already in use on this node
+        "500":
+          description: Internal server error
+    delete:
+      summary: Shutdown and remove a session
+      operationId: deleteSession
+      description: |
+        Sends shutdown signal to the PTY process and marks the session as exited.
+        The session record is retained for audit purposes but will no longer appear
+        as active. Returns 204 whether or not the process was alive.
+      responses:
+        "204":
+          description: Session terminated
+        "404":
+          description: Session not found
+        "500":
+          description: Internal server error
+
+  /api/v1/sessions/{id}/resize:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Resize the PTY window
+      operationId: resizeSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResizeRequest"
+      responses:
+        "200":
+          description: Resize applied
+        "404":
+          description: Session not found or not live
+        "500":
+          description: Internal server error
+
+  /api/v1/sessions/{id}/prompt:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Write a text prompt to the PTY (appends CR)
+      operationId: promptSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromptRequest"
+      responses:
+        "204":
+          description: Prompt sent
+        "404":
+          description: Session not found or not live
+        "500":
+          description: Internal server error
+
+  /api/v1/sessions/{id}/key:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Send a named keystroke to the PTY
+      operationId: sendKey
+      description: |
+        Supported key names: Enter, Tab, Escape, Backspace, Delete, Home, End,
+        Up, Down, Left, Right, Ctrl-a, Ctrl-c, Ctrl-d, Ctrl-e, Ctrl-l, Ctrl-u,
+        Ctrl-w, Ctrl-z.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KeyRequest"
+      responses:
+        "204":
+          description: Key sent
+        "400":
+          description: Unknown key name
+        "404":
+          description: Session not found or not live
+        "500":
+          description: Internal server error
+
+  /api/v1/sessions/{id}/output:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: offset
+        in: query
+        required: false
+        description: Ring buffer byte offset to read from (default 0)
+        schema:
+          type: integer
+          format: int64
+      - name: len
+        in: query
+        required: false
+        description: Maximum bytes to return (default 65536)
+        schema:
+          type: integer
+          format: int32
+    get:
+      summary: Read raw PTY output from ring buffer
+      operationId: getOutput
+      responses:
+        "200":
+          description: Raw bytes from ring buffer
+          headers:
+            X-Ring-Head:
+              schema:
+                type: integer
+              description: Current monotonic write position
+            X-Ring-Capacity:
+              schema:
+                type: integer
+              description: Ring buffer capacity in bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Session not found
+        "410":
+          description: Requested data has been overwritten (offset too old)
+        "500":
+          description: Internal server error
+
+  /api/v1/sessions/{id}/events:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: since
+        in: query
+        required: false
+        description: Return events with id > this value
+        schema:
+          type: integer
+          format: int64
+      - name: kind
+        in: query
+        required: false
+        description: Filter by event kind string
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+    get:
+      summary: Query persisted session events
+      operationId: getEvents
+      responses:
+        "200":
+          description: Array of stored events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoredEvent"
+        "404":
+          description: Session not found
+        "500":
+          description: Internal server error
+
+  /api/v1/broadcast:
+    post:
+      summary: Send a prompt to multiple sessions matching an optional filter
+      operationId: broadcast
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BroadcastRequest"
+      responses:
+        "200":
+          description: Number of sessions that received the prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastResponse"
+        "500":
+          description: Internal server error
+
+  /api/v1/metrics:
+    get:
+      summary: Runtime metrics snapshot
+      operationId: getMetrics
+      responses:
+        "200":
+          description: Metrics object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+        "500":
+          description: Internal server error
+
+components:
+  schemas:
+    SessionId:
+      type: string
+      description: ULID string (26 characters)
+      example: 01HWZK3Q5T2XMZVNPQ7FVCGJKR
+
+    SessionKind:
+      oneOf:
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [shell]
+          required: [type]
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [claude_code]
+            config_override:
+              type: string
+              nullable: true
+              description: Path to claude config override file
+            project_dir:
+              type: string
+              nullable: true
+              description: Project directory for Claude Code context
+          required: [type]
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [raw_bytes]
+          required: [type]
+
+    SessionState:
+      type: string
+      enum: [booting, idle, streaming, awaiting, error, exited]
+
+    ExitInfo:
+      type: object
+      properties:
+        code:
+          type: integer
+          nullable: true
+        signal:
+          type: string
+          nullable: true
+        reason:
+          type: string
+      required: [reason]
+
+    AgentMeta:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        tokens_used:
+          type: integer
+          format: int64
+        last_tool_call:
+          type: string
+          nullable: true
+      required: [name, tokens_used]
+
+    Session:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/SessionId"
+        slug:
+          type: string
+          description: Human-readable identifier (unique per node)
+        node_id:
+          type: string
+          description: Node identifier (currently always "local")
+        kind:
+          $ref: "#/components/schemas/SessionKind"
+        state:
+          $ref: "#/components/schemas/SessionState"
+        cwd:
+          type: string
+          description: Working directory for the session process
+        env:
+          type: object
+          description: Extra environment variables passed at spawn
+        agent_meta:
+          $ref: "#/components/schemas/AgentMeta"
+          nullable: true
+        labels:
+          type: object
+          description: Arbitrary key-value labels
+        created_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds
+        last_activity_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds
+        exit:
+          $ref: "#/components/schemas/ExitInfo"
+          nullable: true
+      required: [id, slug, node_id, kind, state, cwd, env, labels, created_at, last_activity_at]
+
+    StoredEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        session_id:
+          type: string
+        ts:
+          type: integer
+          format: int64
+          description: Unix milliseconds
+        kind:
+          type: string
+        event:
+          description: Decoded event payload (shape varies by kind)
+      required: [id, session_id, ts, kind, event]
+
+    CreateSessionRequest:
+      type: object
+      properties:
+        slug:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,31}$"
+          description: Human-readable identifier (unique per node)
+        kind:
+          $ref: "#/components/schemas/SessionKind"
+        cols:
+          type: integer
+          default: 80
+        rows:
+          type: integer
+          default: 24
+      required: [slug, kind]
+
+    PatchSessionRequest:
+      type: object
+      properties:
+        slug:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,31}$"
+          nullable: true
+        labels:
+          type: object
+          nullable: true
+      description: At least one field should be provided
+
+    ResizeRequest:
+      type: object
+      properties:
+        cols:
+          type: integer
+        rows:
+          type: integer
+      required: [cols, rows]
+
+    PromptRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Text to write to the PTY (CR appended automatically)
+      required: [text]
+
+    KeyRequest:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Named key (e.g. Enter, Tab, Ctrl-c, Up)
+      required: [key]
+
+    BroadcastFilter:
+      type: object
+      properties:
+        kind:
+          type: string
+          nullable: true
+          description: Filter by driver kind (shell, claude_code, raw_bytes)
+        labels:
+          type: object
+          nullable: true
+          description: Subset of labels that must all match
+
+    BroadcastRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Text to send to each matching session (CR appended)
+        filter:
+          $ref: "#/components/schemas/BroadcastFilter"
+          nullable: true
+      required: [text]
+
+    BroadcastResponse:
+      type: object
+      properties:
+        sent:
+          type: integer
+          description: Number of sessions that received the prompt
+      required: [sent]
+
+    MetricsResponse:
+      type: object
+      properties:
+        sessions_active:
+          type: integer
+          description: Number of live sessions in memory registry
+        sessions_by_state:
+          type: object
+          description: Count of sessions per state string
+        tokens_today:
+          type: integer
+          format: int64
+          description: Total tokens from metrics_daily for today
+        push_sent_today:
+          type: integer
+          format: int64
+          description: Total push events from metrics_daily for today
+        rss_mb:
+          type: number
+          format: double
+          description: Process RSS in megabytes (Linux only; 0 elsewhere)
+        uptime_s:
+          type: integer
+          format: int64
+          description: Process uptime in seconds
+        version:
+          type: string
+          description: Cargo package version
+      required: [sessions_active, sessions_by_state, tokens_today, push_sent_today, rss_mb, uptime_s, version]
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+        uptime_s:
+          type: integer
+          format: int64
+        supervisor_connected:
+          type: boolean
+      required: [status, version, uptime_s, supervisor_connected]
