@@ -72,6 +72,7 @@ async fn test_write_2mb_wraps_ring_and_logs_events() {
 
     // last 256 KB of writes should be readable and correct
     let check_from = num_chunks - 64; // last 64 chunks = 256 KB
+    #[allow(clippy::needless_range_loop)]
     for i in check_from..num_chunks {
         let (offset, len) = written_offsets[i];
         let data = ring2.read_at(offset, len).unwrap();

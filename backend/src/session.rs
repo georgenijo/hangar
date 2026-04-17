@@ -8,6 +8,12 @@ use ulid::Ulid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionId(String);
 
+impl Default for SessionId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionId {
     pub fn new() -> Self {
         SessionId(Ulid::new().to_string())
@@ -101,13 +107,9 @@ impl Session {
         let agent_meta = self
             .agent_meta
             .as_ref()
-            .map(|m| serde_json::to_string(m))
+            .map(serde_json::to_string)
             .transpose()?;
-        let exit = self
-            .exit
-            .as_ref()
-            .map(|e| serde_json::to_string(e))
-            .transpose()?;
+        let exit = self.exit.as_ref().map(serde_json::to_string).transpose()?;
 
         sqlx::query(
             "INSERT INTO sessions (id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit)

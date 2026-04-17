@@ -50,7 +50,7 @@ impl RingBuf {
         let mut header = [0u8; 16];
         file.read_at(&mut header, 0)?;
 
-        if &header[0..4] != &MAGIC {
+        if header[0..4] != MAGIC {
             bail!("invalid magic bytes");
         }
         if header[4] != VERSION {
