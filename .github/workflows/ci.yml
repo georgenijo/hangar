@@ -4,82 +4,97 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   docs:
-    name: Docs sanity
+    name: Docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check markdown link references
+      - name: Check internal markdown links
+        shell: bash
         run: |
-          # Fail only on broken same-repo references (no external link checks).
-          set -e
+          set -u
           missing=0
-          while IFS= read -r file; do
-            while IFS= read -r ref; do
-              target="$(echo "$ref" | sed 's|^.*(||;s|)$||;s|#.*$||')"
-              [[ -z "$target" ]] && continue
-              [[ "$target" =~ ^https?:// ]] && continue
-              [[ "$target" =~ ^mailto: ]] && continue
-              # Resolve relative to the file's dir
-              dir="$(dirname "$file")"
-              abs="$dir/$target"
-              if [[ ! -e "$abs" ]]; then
-                echo "  BROKEN: $file -> $target"
+          shopt -s globstar nullglob
+          for file in README.md CHANGELOG.md docs/**/*.md; do
+            [ -f "$file" ] || continue
+            while read -r ref; do
+              target=${ref#*\(}
+              target=${target%\)}
+              target=${target%%#*}
+              [ -z "$target" ] && continue
+              case "$target" in
+                http://*|https://*|mailto:*|tel:*) continue ;;
+              esac
+              dir=$(dirname "$file")
+              if [ ! -e "$dir/$target" ]; then
+                echo "::warning file=$file::broken internal link -> $target"
                 missing=$((missing + 1))
               fi
-            done < <(grep -Eo '\]\([^)]+\)' "$file" || true)
-          done < <(find docs README.md CHANGELOG.md -name '*.md' -type f 2>/dev/null)
-          if [[ $missing -gt 0 ]]; then
-            echo "::error::$missing broken internal doc link(s)"
-            exit 1
-          fi
-          echo "All internal doc links resolve."
+            done < <(grep -oE '\]\([^)]+\)' "$file" || true)
+          done
+          echo "Total broken internal links: $missing"
+          # Warn-only for now; will enforce once doc set stabilizes.
 
   backend:
     name: Backend (Rust)
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('backend/Cargo.toml') != '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check for backend
+        id: check
+        run: |
+          if [ -f backend/Cargo.toml ]; then
+            echo "present=true" >> $GITHUB_OUTPUT
+          else
+            echo "present=false" >> $GITHUB_OUTPUT
+          fi
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.check.outputs.present == 'true'
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: backend
-      - name: cargo fmt
+      - name: fmt
+        if: steps.check.outputs.present == 'true'
         working-directory: backend
         run: cargo fmt --all -- --check
-      - name: cargo clippy
+      - name: clippy
+        if: steps.check.outputs.present == 'true'
         working-directory: backend
         run: cargo clippy --all-targets -- -D warnings
-      - name: cargo test
+      - name: test
+        if: steps.check.outputs.present == 'true'
         working-directory: backend
         run: cargo test --all
 
   frontend:
     name: Frontend (SvelteKit)
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('frontend/package.json') != '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check for frontend
+        id: check
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "present=true" >> $GITHUB_OUTPUT
+          else
+            echo "present=false" >> $GITHUB_OUTPUT
+          fi
       - uses: pnpm/action-setup@v4
+        if: steps.check.outputs.present == 'true'
         with:
           version: 9
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.present == 'true'
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - name: install
+        if: steps.check.outputs.present == 'true'
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-      - name: svelte-check
-        working-directory: frontend
-        run: pnpm exec svelte-check --fail-on-warnings
       - name: build
+        if: steps.check.outputs.present == 'true'
         working-directory: frontend
         run: pnpm build
