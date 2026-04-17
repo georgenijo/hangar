@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hangar terminal</title>
+  <link rel="stylesheet" href="https://unpkg.com/@xterm/xterm@5/css/xterm.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1a1a2e; color: #e0e0e0; font-family: monospace; height: 100vh; display: flex; flex-direction: column; }
+    #statusbar { padding: 4px 10px; background: #0f0f1e; font-size: 12px; display: flex; gap: 12px; border-bottom: 1px solid #333; }
+    #status-id { color: #888; }
+    #status-conn { color: #4caf50; }
+    #status-conn.disconnected { color: #f44336; }
+    #terminal { flex: 1; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <div id="statusbar">
+    <span id="status-id">connecting...</span>
+    <span id="status-conn">●</span>
+  </div>
+  <div id="terminal"></div>
+
+  <script src="https://unpkg.com/@xterm/xterm@5/lib/xterm.js"></script>
+  <script src="https://unpkg.com/@xterm/addon-fit@0.10/lib/addon-fit.js"></script>
+  <script>
+    const statusId = document.getElementById('status-id');
+    const statusConn = document.getElementById('status-conn');
+
+    const term = new Terminal({
+      cursorBlink: true,
+      theme: { background: '#1a1a2e', foreground: '#e0e0e0' },
+    });
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+    fitAddon.fit();
+
+    let ws = null;
+    let sessionId = null;
+
+    function randomSlug() {
+      return 'shell-' + Math.random().toString(16).slice(2, 6);
+    }
+
+    async function createSession(slug, attempt) {
+      attempt = attempt || 0;
+      if (attempt >= 3) {
+        statusId.textContent = 'error: could not create session';
+        return;
+      }
+      try {
+        const res = await fetch('/api/v1/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slug: slug,
+            kind: { Shell: { command: ['/bin/bash', '-l'] } },
+          }),
+        });
+        if (res.status === 409) {
+          return createSession(randomSlug(), attempt + 1);
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          statusId.textContent = 'error: ' + (err.error || res.status);
+          return;
+        }
+        const session = await res.json();
+        sessionId = session.id;
+        statusId.textContent = 'session: ' + session.slug + ' (' + session.id + ')';
+        connectWs();
+      } catch (e) {
+        statusId.textContent = 'error: ' + e.message;
+      }
+    }
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(proto + '//' + location.host + '/ws/v1/sessions/' + sessionId + '/pty');
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = function () {
+        statusConn.textContent = '●';
+        statusConn.className = '';
+        sendResize();
+      };
+
+      ws.onmessage = function (evt) {
+        term.write(new Uint8Array(evt.data));
+      };
+
+      ws.onclose = function () {
+        statusConn.textContent = '● disconnected';
+        statusConn.className = 'disconnected';
+        setTimeout(connectWs, 2000);
+      };
+
+      ws.onerror = function () {
+        statusConn.textContent = '● error';
+        statusConn.className = 'disconnected';
+      };
+    }
+
+    function sendResize() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      fitAddon.fit();
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      fetch('/api/v1/sessions/' + sessionId + '/resize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cols: term.cols, rows: term.rows }),
+      }).catch(() => {});
+    }
+
+    term.onData(function (data) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(new TextEncoder().encode(data));
+      }
+    });
+
+    const ro = new ResizeObserver(function () {
+      sendResize();
+    });
+    ro.observe(document.getElementById('terminal'));
+
+    createSession(randomSlug());
+  </script>
+</body>
+</html>

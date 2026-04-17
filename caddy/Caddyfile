@@ -12,6 +12,23 @@
 		reverse_proxy localhost:7684
 	}
 
+	# hangar backend REST API
+	handle_path /api/* {
+		reverse_proxy localhost:3000
+	}
+
+	# hangar backend WebSocket (preserve /ws/ prefix)
+	handle /ws/* {
+		reverse_proxy localhost:3000
+	}
+
+	# Phase 2 xterm.js terminal UI
+	handle_path /v2* {
+		root * /home/george/Documents/hangar/web/v2
+		try_files {path} /index.html
+		file_server
+	}
+
 	# static dashboard
 	handle {
 		root * /home/george/Documents/hangar/web

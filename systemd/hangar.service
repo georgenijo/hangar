@@ -1,0 +1,17 @@
+[Unit]
+Description=hangar session daemon (hangard)
+After=network.target
+Requires=network.target
+
+[Service]
+Type=simple
+User=george
+Group=george
+Environment=RUST_LOG=info
+ExecStart=/home/george/.cargo/bin/hangard
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
