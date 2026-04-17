@@ -97,15 +97,15 @@ dispatch_one() {
     echo "  [issue #$issue] reusing existing worktree at $wt"
   fi
 
-  # Spawn pipeline in its own tmux session, inside the worktree.
-  # PROJECT_NAME_OVERRIDE keeps logs unified under $PROJECT_NAME even though
-  # pipeline.sh would otherwise derive a different name from basename(PROJECT_DIR).
+  # Spawn pipeline in its own tmux session, inside the worktree. Session exits
+  # when pipeline.sh finishes so the slot frees for the next queued issue. Full
+  # log is available in $pipe_log for post-mortem.
   tmux new-session -d -s "$session" \
     "cd '$wt' && source ~/.cargo/env 2>/dev/null || true; \
      export PROJECT_NAME_OVERRIDE='$PROJECT_NAME'; \
      '$SCRIPT_DIR/pipeline.sh' '$issue' --project-dir '$wt' 2>&1 \
        | tee '$pipe_log'; \
-     echo; echo '=== pipeline exited for issue $issue ==='; exec bash"
+     echo '=== pipeline exited for issue $issue ==='"
 
   echo "  [issue #$issue] spawned tmux session $session (log: $pipe_log)"
 }
