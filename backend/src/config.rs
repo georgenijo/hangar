@@ -78,6 +78,16 @@ fn default_rules() -> Vec<PushRule> {
             enabled: true,
             priority: NtfyPriority::Normal,
         },
+        PushRule {
+            name: "high_token_burn".to_string(),
+            enabled: true,
+            priority: NtfyPriority::Normal,
+        },
+        PushRule {
+            name: "approaching_context_window".to_string(),
+            enabled: true,
+            priority: NtfyPriority::High,
+        },
     ]
 }
 
