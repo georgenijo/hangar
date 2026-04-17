@@ -1,6 +1,7 @@
 [Unit]
 Description=Hangar backend daemon
-After=network.target
+After=network.target hangar-supervisor.service
+Requires=hangar-supervisor.service
 
 [Service]
 Type=simple

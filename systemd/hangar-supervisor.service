@@ -1,0 +1,17 @@
+[Unit]
+Description=Hangar PTY supervisor daemon
+Before=hangar.service
+
+[Service]
+Type=simple
+User=george
+ExecStart=/home/george/Documents/hangar/backend/target/release/hangar-supervisor
+Environment=RUST_LOG=info
+Restart=always
+RestartSec=1
+# Only kill supervisor process on stop, not its PTY children
+# Children get reparented to PID 1 until supervisor restarts
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

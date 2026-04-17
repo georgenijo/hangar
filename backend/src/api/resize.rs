@@ -3,7 +3,6 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use portable_pty::PtySize;
 use serde::Deserialize;
 
 use crate::events::Event;
@@ -25,14 +24,7 @@ pub async fn resize_session(
 
     active
         .master
-        .lock()
-        .unwrap()
-        .resize(PtySize {
-            rows: body.rows,
-            cols: body.cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
+        .resize(body.cols, body.rows)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     state.event_bus.send(
