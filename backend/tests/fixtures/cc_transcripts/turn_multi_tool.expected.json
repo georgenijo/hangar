@@ -1,0 +1,1 @@
+[{"type":"turn_started","role":"user"},{"type":"tool_call_started","tool":"Read"},{"type":"tool_call_finished"}]

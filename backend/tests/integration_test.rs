@@ -15,7 +15,7 @@ fn make_session(id: &SessionId) -> Session {
         slug: format!("test-{}", id),
         node_id: "local".to_string(),
         kind: SessionKind::Shell,
-        state: SessionState::Running,
+        state: SessionState::Idle,
         cwd: "/tmp".to_string(),
         env: serde_json::json!({}),
         agent_meta: None,
@@ -72,9 +72,7 @@ async fn test_write_2mb_wraps_ring_and_logs_events() {
 
     // last 256 KB of writes should be readable and correct
     let check_from = num_chunks - 64; // last 64 chunks = 256 KB
-    #[allow(clippy::needless_range_loop)]
-    for i in check_from..num_chunks {
-        let (offset, len) = written_offsets[i];
+    for (i, &(offset, len)) in written_offsets.iter().enumerate().skip(check_from) {
         let data = ring2.read_at(offset, len).unwrap();
         assert_eq!(data.len(), chunk_size);
         let expected_byte = (i % 256) as u8;
@@ -127,4 +125,102 @@ async fn test_write_2mb_wraps_ring_and_logs_events() {
             "expected stale error for oldest event"
         );
     }
+}
+
+#[tokio::test]
+async fn test_session_claude_code_kind_round_trip() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let session_id = SessionId::new();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let session = Session {
+        id: session_id.clone(),
+        slug: format!("test-cc-{}", session_id),
+        node_id: "local".to_string(),
+        kind: SessionKind::ClaudeCode {
+            config_override: None,
+            project_dir: None,
+        },
+        state: SessionState::Idle,
+        cwd: "/tmp".to_string(),
+        env: serde_json::json!({}),
+        agent_meta: None,
+        labels: serde_json::json!({}),
+        created_at: now,
+        last_activity_at: now,
+        exit: None,
+    };
+
+    session.insert(pool).await.unwrap();
+    let loaded = Session::get(pool, &session_id).await.unwrap().unwrap();
+
+    assert!(matches!(
+        loaded.kind,
+        SessionKind::ClaudeCode {
+            config_override: None,
+            project_dir: None
+        }
+    ));
+    assert_eq!(loaded.state, SessionState::Idle);
+}
+
+#[tokio::test]
+async fn test_agent_event_round_trip() {
+    use hangard::events::{AgentEvent, TurnRole};
+
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let session_id = SessionId::new();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let session = Session {
+        id: session_id.clone(),
+        slug: format!("test-ae-{}", session_id),
+        node_id: "local".to_string(),
+        kind: SessionKind::Shell,
+        state: SessionState::Idle,
+        cwd: "/tmp".to_string(),
+        env: serde_json::json!({}),
+        agent_meta: None,
+        labels: serde_json::json!({}),
+        created_at: now,
+        last_activity_at: now,
+        exit: None,
+    };
+    session.insert(pool).await.unwrap();
+
+    let event = Event::AgentEvent {
+        id: session_id.clone(),
+        event: AgentEvent::TurnStarted {
+            turn_id: 1,
+            role: TurnRole::User,
+            content_start: Some("hello".to_string()),
+        },
+    };
+
+    EventStore::insert(pool, session_id.as_ref(), &event)
+        .await
+        .unwrap();
+
+    let stored = EventStore::query(pool, session_id.as_ref(), 0, Some("AgentEvent"), 10)
+        .await
+        .unwrap();
+
+    assert_eq!(stored.len(), 1);
+    assert!(matches!(
+        &stored[0].event,
+        Event::AgentEvent {
+            event: AgentEvent::TurnStarted { turn_id: 1, .. },
+            ..
+        }
+    ));
 }

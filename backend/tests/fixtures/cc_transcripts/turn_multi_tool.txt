@@ -1,0 +1,4 @@
+❯ Read and summarize /tmp/data.txt
+⏺ Read(path: /tmp/data.txt)
+
+Here is the summary.
