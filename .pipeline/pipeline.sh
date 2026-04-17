@@ -122,7 +122,6 @@ MODEL_FIXER="sonnet"
 
 if [ -f "$MODELS_FILE" ]; then
   MODEL_ARCHITECT=$(jq -r '.assignments.architect // "opus"' "$MODELS_FILE")
-  MODEL_REVIEWER=$(jq -r '.assignments["senior-reviewer"] // "opus"' "$MODELS_FILE")
   MODEL_BUILDER=$(jq -r '.assignments.builder // "sonnet"' "$MODELS_FILE")
   MODEL_TESTER=$(jq -r '.assignments.tester // "sonnet"' "$MODELS_FILE")
   MODEL_FIXER=$(jq -r '.assignments.fixer // "sonnet"' "$MODELS_FILE")
@@ -132,10 +131,12 @@ if [ -f "$MODELS_FILE" ]; then
 
   echo ""
   echo "Model assignments (complexity=$COMPLEXITY):"
-  echo "  architect=$MODEL_ARCHITECT reviewer=$MODEL_REVIEWER builder=$MODEL_BUILDER tester=$MODEL_TESTER fixer=$MODEL_FIXER"
+  echo "  architect=$MODEL_ARCHITECT reviewer=$MODEL_REVIEWER (forced opus) builder=$MODEL_BUILDER tester=$MODEL_TESTER fixer=$MODEL_FIXER"
 else
   echo "No models.json — using defaults (opus/sonnet)"
 fi
+# senior-reviewer is ALWAYS opus — architectural-gate role, accuracy > cost
+MODEL_REVIEWER="opus"
 
 # --- Step 2 & 3: Architect + Review Loop ---
 PLAN_VERSION=1

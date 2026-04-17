@@ -62,7 +62,7 @@ Write this exact JSON structure to `models.json` in the same directory as contex
 
 Assignment rules:
 - **low**: all sonnet
-- **medium**: architect=opus, rest=sonnet
+- **medium**: architect=opus, senior-reviewer=opus, rest=sonnet
 - **high**: architect=opus, senior-reviewer=opus, rest=sonnet
 - builder/tester/fixer are ALWAYS sonnet
 
