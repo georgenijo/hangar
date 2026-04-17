@@ -241,7 +241,17 @@ if ! should_skip_step "$LOG_FILE" "builder"; then
   CONTEXT_CONTENT="$(cat "$CONTEXT_FILE")"
 
   # Create branch
-  BRANCH_NAME="issue-${ISSUE_NUM}-$(echo "$ISSUE_BODY" | head -1 | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]' | cut -c1-40)"
+  # Extract issue title (strip markdown heading prefix + issue number prefix),
+  # slugify, collapse repeated dashes, trim trailing/leading dashes, cap length.
+  SLUG=$(echo "$ISSUE_BODY" \
+    | head -1 \
+    | sed -E 's/^#+ *//; s/^Issue #[0-9]+:? *//' \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed 's/[^a-z0-9]/-/g' \
+    | sed -E 's/-+/-/g; s/^-//; s/-$//' \
+    | cut -c1-40 \
+    | sed -E 's/-$//')
+  BRANCH_NAME="issue-${ISSUE_NUM}-${SLUG}"
   git -C "$PROJECT_DIR" checkout -b "$BRANCH_NAME" 2>/dev/null || git -C "$PROJECT_DIR" checkout "$BRANCH_NAME"
 
   run_agent "builder" "$MODEL_BUILDER" \
