@@ -30,6 +30,8 @@ fn variant_name(e: &AgentEvent) -> &'static str {
         AgentEvent::ModelChanged { .. } => "model_changed",
         AgentEvent::Error { .. } => "error",
         AgentEvent::ContextWindowSizeChanged { .. } => "context_window_size_changed",
+        AgentEvent::SandboxStateChanged { .. } => "sandbox_state_changed",
+        AgentEvent::SandboxMerged { .. } => "sandbox_merged",
     }
 }
 

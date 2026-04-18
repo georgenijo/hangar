@@ -15,7 +15,8 @@ use crate::drivers::{AgentDriver, SpawnCfg, StateCtx};
 use crate::events::{AgentEvent, Event, EventBus};
 use crate::raw_fd_master::RawFdMaster;
 use crate::ringbuf::{RingBuf, DEFAULT_CAPACITY};
-use crate::session::{SessionId, SessionState};
+use crate::sandbox::{SandboxState, SandboxStatus};
+use crate::session::{Session, SessionId, SessionState};
 
 pub enum PtyMaster {
     Local(Arc<Mutex<Box<dyn MasterPty + Send>>>),
@@ -262,6 +263,28 @@ pub fn spawn_pty(
                 to: SessionState::Exited,
             },
         );
+        // If session had a running sandbox, mark it stopped
+        if let Ok(Some(session)) = Session::get(&db, &cleanup_sid).await {
+            if let Some(sb) = session.sandbox {
+                if matches!(sb.state, SandboxState::Running | SandboxState::Creating) {
+                    let _ = Session::update_sandbox_state(
+                        &db,
+                        cleanup_sid.as_ref(),
+                        SandboxState::Stopped,
+                    )
+                    .await;
+                    cleanup_bus.send(
+                        cleanup_sid.to_string(),
+                        Event::AgentEvent {
+                            id: cleanup_sid.clone(),
+                            event: AgentEvent::SandboxStateChanged {
+                                state: SandboxState::Stopped,
+                            },
+                        },
+                    );
+                }
+            }
+        }
     });
 
     let created_at = std::time::SystemTime::now()
@@ -278,6 +301,59 @@ pub fn spawn_pty(
         child: Some(Arc::new(Mutex::new(child))),
         created_at,
     })
+}
+
+/// Wraps an existing command vector with `sudo podman exec` to run inside a
+/// pre-created sandbox container.
+///
+/// # Known limitation
+/// Without `-t`, curses apps (vim, htop) won't receive SIGWINCH inside the
+/// container. Set `allocate_tty: true` in SandboxSpec for interactive shell
+/// sessions. This may cause double-PTY signal issues — monitor and report.
+#[allow(clippy::too_many_arguments)]
+pub async fn spawn_pty_sandboxed(
+    session_id: SessionId,
+    spawn_cfg: SpawnCfg,
+    sandbox_status: &SandboxStatus,
+    driver: Box<dyn AgentDriver>,
+    ring_dir: PathBuf,
+    event_bus: Arc<EventBus>,
+    db: SqlitePool,
+    initial_size: (u16, u16),
+) -> Result<ActiveSession> {
+    let tty_flag = if sandbox_status.spec.allocate_tty {
+        "-t"
+    } else {
+        "-i"
+    };
+
+    let container_name = &sandbox_status.container_name;
+    let mut wrapped = vec![
+        "sudo".to_string(),
+        "podman".to_string(),
+        "exec".to_string(),
+        tty_flag.to_string(),
+        container_name.clone(),
+        "--".to_string(),
+    ];
+    wrapped.extend(spawn_cfg.command.iter().cloned());
+
+    let wrapped_cfg = SpawnCfg {
+        command: wrapped,
+        env: spawn_cfg.env,
+        cwd: spawn_cfg.cwd,
+        temp_files: spawn_cfg.temp_files,
+    };
+
+    spawn_pty(
+        session_id,
+        wrapped_cfg,
+        driver,
+        ring_dir,
+        event_bus,
+        db,
+        initial_size,
+    )
 }
 
 pub fn reattach(
@@ -403,6 +479,81 @@ mod tests {
     use crate::drivers::SpawnRequest;
     use crate::session::SessionKind;
     use std::collections::HashMap;
+
+    #[test]
+    fn sandboxed_command_wrapping_no_tty() {
+        use crate::sandbox::{SandboxSpec, SandboxState, SandboxStatus};
+        use std::path::PathBuf;
+
+        let status = SandboxStatus {
+            spec: SandboxSpec {
+                allocate_tty: false,
+                ..SandboxSpec::default()
+            },
+            state: SandboxState::Running,
+            container_name: "hangar-ABC".to_string(),
+            overlay_dir: PathBuf::from("/tmp/o"),
+            project_dir: PathBuf::from("/home/user/project"),
+            merged_dir: PathBuf::from("/tmp/o/merged"),
+        };
+
+        let inner_cmd = ["claude", "--arg"];
+        let tty_flag = if status.spec.allocate_tty { "-t" } else { "-i" };
+        let mut wrapped: Vec<String> = [
+            "sudo",
+            "podman",
+            "exec",
+            tty_flag,
+            &status.container_name,
+            "--",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        wrapped.extend(inner_cmd.iter().map(|s| s.to_string()));
+
+        assert_eq!(wrapped[0], "sudo");
+        assert_eq!(wrapped[1], "podman");
+        assert_eq!(wrapped[2], "exec");
+        assert_eq!(wrapped[3], "-i");
+        assert_eq!(wrapped[4], "hangar-ABC");
+        assert_eq!(wrapped[5], "--");
+        assert_eq!(wrapped[6], "claude");
+        assert_eq!(wrapped[7], "--arg");
+    }
+
+    #[test]
+    fn sandboxed_command_wrapping_with_tty() {
+        use crate::sandbox::{SandboxSpec, SandboxState, SandboxStatus};
+        use std::path::PathBuf;
+
+        let status = SandboxStatus {
+            spec: SandboxSpec {
+                allocate_tty: true,
+                ..SandboxSpec::default()
+            },
+            state: SandboxState::Running,
+            container_name: "hangar-XYZ".to_string(),
+            overlay_dir: PathBuf::from("/tmp/o"),
+            project_dir: PathBuf::from("/home/user/project"),
+            merged_dir: PathBuf::from("/tmp/o/merged"),
+        };
+
+        let tty_flag = if status.spec.allocate_tty { "-t" } else { "-i" };
+        let wrapped: Vec<String> = [
+            "sudo",
+            "podman",
+            "exec",
+            tty_flag,
+            &status.container_name,
+            "--",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+        assert_eq!(wrapped[3], "-t");
+    }
 
     #[tokio::test]
     #[ignore = "requires PTY allocation; run manually"]

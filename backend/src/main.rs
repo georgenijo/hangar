@@ -4,7 +4,13 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use tracing::{info, warn};
 
-use hangard::{api, db::Db, events::EventBus, session::SessionState, AppState};
+use hangard::{
+    api,
+    db::Db,
+    events::{EventBus, EventStore},
+    session::SessionState,
+    AppState,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,6 +25,11 @@ async fn main() -> Result<()> {
     std::fs::create_dir_all(&sessions_dir)?;
 
     let db = Db::new(Some(state_dir.join("hangar.db"))).await?;
+
+    let backfilled = EventStore::backfill_fts(db.pool()).await?;
+    if backfilled > 0 {
+        info!("backfilled FTS index for {} events", backfilled);
+    }
 
     let event_bus = Arc::new(EventBus::new());
     let sessions_registry: hangard::SessionRegistry = Arc::new(RwLock::new(HashMap::new()));
@@ -63,6 +74,22 @@ async fn main() -> Result<()> {
         hangard::config::HangarConfig::default()
     });
 
+    let sandbox_manager = if config.sandbox.enabled {
+        let mgr = hangard::sandbox::SandboxManager::new(
+            config.sandbox.overlay_base.clone(),
+            config.sandbox.restic_repo.clone(),
+        );
+        if let Err(e) = mgr.startup_cleanup(db.pool()).await {
+            warn!("sandbox startup_cleanup failed: {e}");
+        }
+        if let Err(e) = mgr.ensure_restic_repo().await {
+            warn!("ensure_restic_repo failed: {e}");
+        }
+        Some(Arc::new(mgr))
+    } else {
+        None
+    };
+
     let mut logs_hub = hangard::logs::LogsHub::new(&config.logs, &sessions_dir);
     logs_hub.start();
     let logs_hub = Arc::new(logs_hub);
@@ -75,6 +102,7 @@ async fn main() -> Result<()> {
         sessions: sessions_registry,
         supervisor,
         start_time,
+        sandbox_manager,
         logs: logs_hub,
     };
 

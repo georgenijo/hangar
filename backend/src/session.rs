@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use ulid::Ulid;
 
+use crate::sandbox::{SandboxState, SandboxStatus};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionId(String);
 
@@ -111,6 +113,7 @@ pub struct Session {
     pub created_at: i64,
     pub last_activity_at: i64,
     pub exit: Option<ExitInfo>,
+    pub sandbox: Option<SandboxStatus>,
 }
 
 impl SessionKind {
@@ -127,7 +130,7 @@ impl SessionKind {
 impl Session {
     pub async fn list(pool: &SqlitePool) -> Result<Vec<Session>> {
         let rows = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit
+            "SELECT id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit, sandbox
              FROM sessions ORDER BY created_at DESC",
         )
         .fetch_all(pool)
@@ -148,10 +151,15 @@ impl Session {
             .map(serde_json::to_string)
             .transpose()?;
         let exit = self.exit.as_ref().map(serde_json::to_string).transpose()?;
+        let sandbox = self
+            .sandbox
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
 
         sqlx::query(
-            "INSERT INTO sessions (id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO sessions (id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit, sandbox)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&id)
         .bind(&self.slug)
@@ -165,6 +173,7 @@ impl Session {
         .bind(self.created_at)
         .bind(self.last_activity_at)
         .bind(&exit)
+        .bind(&sandbox)
         .execute(pool)
         .await?;
 
@@ -174,7 +183,7 @@ impl Session {
     pub async fn get(pool: &SqlitePool, id: &SessionId) -> Result<Option<Session>> {
         let id_str = id.to_string();
         let row = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit
+            "SELECT id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit, sandbox
              FROM sessions WHERE id = ?",
         )
         .bind(&id_str)
@@ -186,7 +195,7 @@ impl Session {
 
     pub async fn get_by_id_or_slug(pool: &SqlitePool, id_or_slug: &str) -> Result<Option<Session>> {
         let row = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit
+            "SELECT id, slug, node_id, kind, state, cwd, env, agent_meta, labels, created_at, last_activity_at, exit, sandbox
              FROM sessions WHERE id = ?1 OR (slug = ?1 AND node_id = 'local') LIMIT 1",
         )
         .bind(id_or_slug)
@@ -211,6 +220,59 @@ impl Session {
             .bind(&state_str)
             .bind(now)
             .bind(&id_str)
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_sandbox(pool: &SqlitePool, id: &str, status: &SandboxStatus) -> Result<()> {
+        let sandbox_json = serde_json::to_string(status)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis() as i64;
+        sqlx::query("UPDATE sessions SET sandbox = ?, last_activity_at = ? WHERE id = ?")
+            .bind(&sandbox_json)
+            .bind(now)
+            .bind(id)
+            .execute(pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_sandbox_state(
+        pool: &SqlitePool,
+        id: &str,
+        state: SandboxState,
+    ) -> Result<()> {
+        let row: Option<(Option<String>,)> =
+            sqlx::query_as("SELECT sandbox FROM sessions WHERE id = ?")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?;
+
+        let sandbox_json = match row.and_then(|(s,)| s) {
+            Some(j) => j,
+            None => return Ok(()),
+        };
+
+        let mut status: SandboxStatus = match serde_json::from_str(&sandbox_json) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!("failed to deserialize sandbox for state update: {e}");
+                return Ok(());
+            }
+        };
+
+        status.state = state;
+        let updated_json = serde_json::to_string(&status)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis() as i64;
+        sqlx::query("UPDATE sessions SET sandbox = ?, last_activity_at = ? WHERE id = ?")
+            .bind(&updated_json)
+            .bind(now)
+            .bind(id)
             .execute(pool)
             .await?;
 
@@ -279,6 +341,17 @@ impl Session {
             })
             .transpose()?;
 
+        let sandbox = row
+            .sandbox
+            .as_deref()
+            .map(|s| {
+                serde_json::from_str::<SandboxStatus>(s).map_err(|e| {
+                    tracing::warn!("failed to deserialize sandbox column: {e}");
+                    e
+                })
+            })
+            .and_then(|r| r.ok());
+
         Ok(Session {
             id: SessionId(row.id),
             slug: row.slug,
@@ -292,6 +365,7 @@ impl Session {
             created_at: row.created_at,
             last_activity_at: row.last_activity_at,
             exit: row.exit.as_deref().map(serde_json::from_str).transpose()?,
+            sandbox,
         })
     }
 }
@@ -310,4 +384,5 @@ struct SessionRow {
     created_at: i64,
     last_activity_at: i64,
     exit: Option<String>,
+    sandbox: Option<String>,
 }

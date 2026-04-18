@@ -8,6 +8,7 @@
 	import ChatView from '$lib/components/ChatView.svelte';
 	import InsightsPanel from '$lib/components/InsightsPanel.svelte';
 	import TerminalView from '$lib/components/TerminalView.svelte';
+	import SandboxDiffView from '$lib/components/SandboxDiffView.svelte';
 
 	let { data }: { data: { session: Session } } = $props();
 
@@ -42,6 +43,9 @@
 		>
 			{session.state}
 		</span>
+		{#if session.state === 'exited'}
+			<a class="replay-link" href="/session/{session.id}/replay">▶ Replay</a>
+		{/if}
 		{#if session.agent_meta?.model}
 			<span class="model-name mono">{session.agent_meta.model}</span>
 		{/if}
@@ -60,6 +64,21 @@
 				style="width: {eventsStore.contextUsage.pctUsed}%; background: {eventsStore.contextUsage.pctUsed > 80 ? '#f44336' : eventsStore.contextUsage.pctUsed > 60 ? '#ff9800' : 'var(--accent)'}"
 			></div>
 			<span class="context-label">{Math.round(eventsStore.contextUsage.pctUsed)}% context</span>
+		</div>
+	{/if}
+
+	{#if session.sandbox}
+		<div class="sandbox-section">
+			<div class="sandbox-header">
+				<span class="sandbox-badge">🔒 Sandbox: {session.sandbox.state.state}</span>
+			</div>
+			{#if session.sandbox.state.state === 'running' || session.sandbox.state.state === 'stopped'}
+				<SandboxDiffView sessionId={session.id} />
+			{:else if session.sandbox.state.state === 'merged'}
+				<span class="sandbox-notice">Overlay merged to host</span>
+			{:else if session.sandbox.state.state === 'failed'}
+				<span class="sandbox-error">Sandbox failed: {session.sandbox.state.message}</span>
+			{/if}
 		</div>
 	{/if}
 
@@ -131,6 +150,19 @@
 		border: 1px solid;
 	}
 
+	.replay-link {
+		font-size: 0.8rem;
+		color: var(--accent);
+		text-decoration: none;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius);
+		padding: 2px 8px;
+	}
+
+	.replay-link:hover {
+		background: rgba(var(--accent-rgb, 100, 180, 255), 0.1);
+	}
+
 	.model-name {
 		font-size: 0.8rem;
 		color: var(--text-muted);
@@ -195,5 +227,34 @@
 		flex-direction: column;
 		background: var(--bg);
 		min-width: 0;
+	.sandbox-section {
+		flex-shrink: 0;
+		border-bottom: 1px solid var(--border);
+		padding: 8px 16px;
+	}
+
+	.sandbox-header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 6px;
+	}
+
+	.sandbox-badge {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: #7c3aed;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.sandbox-notice {
+		font-size: 0.8rem;
+		color: #4caf50;
+	}
+
+	.sandbox-error {
+		font-size: 0.8rem;
+		color: #f44336;
 	}
 </style>
