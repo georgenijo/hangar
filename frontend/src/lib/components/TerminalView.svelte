@@ -59,13 +59,13 @@
 
 		async function scheduleReconnect() {
 			if (destroyed) return;
-			if (reconnectAttempts >= 5) {
+			if (reconnectAttempts >= 9999) {
 				status = 'failed';
 				return;
 			}
 
 			status = 'disconnected';
-			const delay = Math.pow(2, reconnectAttempts) * 1000;
+			const delay = Math.min(Math.pow(2, reconnectAttempts) * 1000, 30000);
 			reconnectAttempts++;
 
 			reconnectTimer = setTimeout(async () => {
@@ -114,7 +114,7 @@
 
 			// Fetch initial output
 			try {
-				const { data, head } = await getSessionOutput(session.id);
+				const { data, head } = await getSessionOutput(session.id, { len: 10_000_000 });
 				if (data.byteLength > 0) {
 					term.write(new Uint8Array(data));
 				}
