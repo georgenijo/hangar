@@ -7,6 +7,7 @@ export default defineConfig({
 		reportCompressedSize: true
 	},
 	server: {
+		allowedHosts: true,
 		proxy: {
 			'/api': 'http://localhost:3000',
 			'/ws': {

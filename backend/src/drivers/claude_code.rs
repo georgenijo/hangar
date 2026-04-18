@@ -292,25 +292,25 @@ impl AgentDriver for ClaudeCodeDriver {
         // Keep temp_dir alive by leaking it — the process owns the lifetime
         std::mem::forget(temp_dir);
 
-        let mut command = vec![
+        let command = vec![
             "claude".to_string(),
-            "--config-dir".to_string(),
-            temp_dir_path.to_string_lossy().into_owned(),
+            "--dangerously-skip-permissions".to_string(),
         ];
-
-        if let Some(pd) = &project_dir {
-            command.push("--cwd".to_string());
-            command.push(pd.to_string_lossy().into_owned());
-        }
 
         let mut env = req.env.clone();
         env.insert("HANGAR_SESSION_ID".to_string(), session_id);
         env.insert("HANGAR_HMAC_KEY".to_string(), hex::encode(&req.hmac_key));
+        env.insert(
+            "CLAUDE_CONFIG_DIR".to_string(),
+            temp_dir_path.to_string_lossy().into_owned(),
+        );
+
+        let cwd = project_dir.unwrap_or_else(|| req.cwd.clone());
 
         Ok(SpawnCfg {
             command,
             env,
-            cwd: req.cwd.clone(),
+            cwd,
             temp_files: vec![temp_dir_path],
         })
     }
