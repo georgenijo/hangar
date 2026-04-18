@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { page } from '$app/stores';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
+	import { sidebarStore } from '$lib/stores/sidebar.svelte';
 	import LabelSidebar from '$lib/components/LabelSidebar.svelte';
 	import SpawnModal from '$lib/components/SpawnModal.svelte';
 	import type { Session } from '$lib/types';
@@ -9,11 +10,26 @@
 	let { children } = $props();
 
 	let spawnOpen = $state(false);
-	let sidebarOpen = $state(true);
+	let collapsed = $derived(sidebarStore.dashboardCollapsed);
 
 	$effect(() => {
 		sessionsStore.startPolling();
 		return () => sessionsStore.stopPolling();
+	});
+
+	$effect(() => {
+		function onKey(e: KeyboardEvent) {
+			if (!e.ctrlKey || e.key !== '\\') return;
+			e.preventDefault();
+			const path = $page.url.pathname;
+			if (path.startsWith('/session/')) {
+				sidebarStore.toggleSession();
+			} else {
+				sidebarStore.toggleDashboard();
+			}
+		}
+		document.addEventListener('keydown', onKey);
+		return () => document.removeEventListener('keydown', onKey);
 	});
 
 	function handleCreated(_session: Session) {
@@ -25,25 +41,30 @@
 	<title>Hangar</title>
 </svelte:head>
 
-<div class="app-shell" class:sidebar-collapsed={!sidebarOpen}>
+<div class="app-shell" class:sidebar-collapsed={collapsed}>
 	<aside class="sidebar">
-		<nav class="nav-links">
-			<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>Sessions</a>
-			<a href="/logs" class="nav-link" class:active={$page.url.pathname === '/logs'}>Logs</a>
-		</nav>
-		<LabelSidebar />
+		<div class="sidebar-header">
+			<button
+				class="collapse-btn"
+				onclick={() => sidebarStore.toggleDashboard()}
+				aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+				title={collapsed ? 'Expand (Ctrl+\\)' : 'Collapse (Ctrl+\\)'}
+			>
+				{collapsed ? '»' : '«'}
+			</button>
+		</div>
+		{#if !collapsed}
+			<nav class="nav-links">
+				<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>Sessions</a>
+				<a href="/logs" class="nav-link" class:active={$page.url.pathname === '/logs'}>Logs</a>
+			</nav>
+			<LabelSidebar />
+		{/if}
 	</aside>
 
 	<main class="content">
 		<header class="topbar">
 			<div class="topbar-left">
-				<button
-					class="hamburger"
-					onclick={() => (sidebarOpen = !sidebarOpen)}
-					aria-label="Toggle sidebar"
-				>
-					☰
-				</button>
 				<span class="logo">Hangar</span>
 			</div>
 			<button class="btn-primary" onclick={() => (spawnOpen = true)}>＋ New Session</button>
@@ -89,12 +110,39 @@
 		background: var(--bg-surface);
 		border-right: 1px solid var(--border);
 		overflow-y: auto;
-		transition: width 0.2s;
+		overflow-x: hidden;
+		transition: width 0.25s ease;
 	}
 
 	.app-shell.sidebar-collapsed .sidebar {
-		width: 0;
-		overflow: hidden;
+		width: 36px;
+	}
+
+	.sidebar-header {
+		display: flex;
+		justify-content: flex-end;
+		padding: 6px;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.app-shell.sidebar-collapsed .sidebar-header {
+		justify-content: center;
+	}
+
+	.collapse-btn {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 0.9rem;
+		line-height: 1;
+		padding: 2px 8px;
+	}
+
+	.collapse-btn:hover {
+		color: var(--text);
+		border-color: var(--accent);
 	}
 
 	.content {
@@ -119,19 +167,6 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-	}
-
-	.hamburger {
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		cursor: pointer;
-		font-size: 1rem;
-		padding: 4px;
-	}
-
-	.hamburger:hover {
-		color: var(--text);
 	}
 
 	.logo {
@@ -200,8 +235,8 @@
 		}
 
 		.app-shell.sidebar-collapsed .sidebar {
-			width: 200px;
-			transform: translateX(-200px);
+			width: 36px;
+			transform: translateX(0);
 		}
 	}
 </style>
