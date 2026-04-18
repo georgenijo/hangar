@@ -17,8 +17,7 @@ async fn main() -> Result<()> {
     let start_time = Instant::now();
     tracing_subscriber::fmt::init();
 
-    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home dir"))?;
-    let state_dir = home.join(".local/state/hangar");
+    let state_dir = hangard::supervisor_protocol::hangar_state_dir();
     std::fs::create_dir_all(&state_dir)?;
 
     let sessions_dir = state_dir.join("sessions");

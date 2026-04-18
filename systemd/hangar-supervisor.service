@@ -4,8 +4,7 @@ Before=hangar.service
 
 [Service]
 Type=simple
-User=george
-ExecStart=/home/george/Documents/hangar/backend/target/release/hangar-supervisor
+ExecStart=%h/Documents/hangar/backend/target/release/hangar-supervisor
 Environment=RUST_LOG=info
 Restart=always
 RestartSec=1
@@ -14,4 +13,4 @@ RestartSec=1
 KillMode=process
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

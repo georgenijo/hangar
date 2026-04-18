@@ -10,8 +10,8 @@ use nix::unistd::Pid;
 use tracing::{info, warn};
 
 use hangard::supervisor_protocol::{
-    read_frame, send_fd, supervisor_sock_path, write_frame, SupervisorRequest, SupervisorResponse,
-    SupervisorSessionInfo,
+    hangar_state_dir, read_frame, send_fd, supervisor_sock_path, write_frame, SupervisorRequest,
+    SupervisorResponse, SupervisorSessionInfo,
 };
 
 struct ManagedSession {
@@ -34,12 +34,13 @@ async fn main() -> Result<()> {
         libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1usize, 0usize, 0usize, 0usize);
     }
 
-    let state_dir = dirs::state_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-        .join("hangar");
+    let state_dir = hangar_state_dir();
     std::fs::create_dir_all(&state_dir)?;
 
     let sock_path = supervisor_sock_path();
+    if let Some(parent) = sock_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     let _ = std::fs::remove_file(&sock_path);
 
     let listener = tokio::net::UnixListener::bind(&sock_path)?;
