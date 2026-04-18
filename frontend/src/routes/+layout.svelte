@@ -17,6 +17,21 @@
 		return () => sessionsStore.stopPolling();
 	});
 
+	$effect(() => {
+		function onKey(e: KeyboardEvent) {
+			if (!e.ctrlKey || e.key !== '\\') return;
+			e.preventDefault();
+			const path = $page.url.pathname;
+			if (path.startsWith('/session/')) {
+				sidebarStore.toggleSession();
+			} else {
+				sidebarStore.toggleDashboard();
+			}
+		}
+		document.addEventListener('keydown', onKey);
+		return () => document.removeEventListener('keydown', onKey);
+	});
+
 	function handleCreated(_session: Session) {
 		spawnOpen = false;
 	}
