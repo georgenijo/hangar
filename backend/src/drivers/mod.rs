@@ -1,4 +1,5 @@
 pub mod claude_code;
+pub mod codex;
 pub mod raw_bytes;
 pub mod shell;
 
@@ -51,6 +52,8 @@ pub struct StateCtx {
     pub current_state: SessionState,
     pub last_activity_ms: i64,
     pub last_event: Option<AgentEvent>,
+    pub last_bytes_ms: i64,
+    pub event_timestamps: Vec<i64>,
 }
 
 pub trait AgentDriver: Send + Sync + 'static {
@@ -81,6 +84,7 @@ impl DriverRegistry {
             Box::new(claude_code::ClaudeCodeDriver::new())
         });
         reg.register("raw_bytes", || Box::new(raw_bytes::RawBytesDriver::new()));
+        reg.register("codex", || Box::new(codex::CodexDriver::new()));
         reg
     }
 

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -69,6 +69,9 @@ pub struct RuleEngine {
     rules: Vec<PushRule>,
     base_url: String,
     context_fired: HashSet<String>,
+    approaching_ctx_fired: HashSet<String>,
+    token_history: HashMap<String, VecDeque<(i64, u32)>>,
+    token_burn_last_notified: HashMap<String, i64>,
 }
 
 impl RuleEngine {
@@ -77,6 +80,9 @@ impl RuleEngine {
             rules: config.rules.clone(),
             base_url: config.base_url.clone(),
             context_fired: HashSet::new(),
+            approaching_ctx_fired: HashSet::new(),
+            token_history: HashMap::new(),
+            token_burn_last_notified: HashMap::new(),
         }
     }
 
@@ -134,10 +140,33 @@ impl RuleEngine {
                 })
             }
 
+            // 90% arm must come before 80% arm — first matching guard wins
             Event::AgentEvent {
                 event: AgentEvent::ContextWindowSizeChanged { pct_used, .. },
                 ..
-            } if *pct_used >= 0.80 => {
+            } if *pct_used >= 0.90 => {
+                let priority = self.rule_enabled("approaching_context_window")?.clone();
+                if self.approaching_ctx_fired.contains(session_id) {
+                    return None;
+                }
+                self.approaching_ctx_fired.insert(session_id.to_string());
+                Some(Notification {
+                    title: "Context window 90%".to_string(),
+                    body: format!(
+                        "Session {} at {:.0}% context — consider compaction",
+                        session_id,
+                        pct_used * 100.0
+                    ),
+                    priority,
+                    click_url,
+                    tags: "warning".to_string(),
+                })
+            }
+
+            Event::AgentEvent {
+                event: AgentEvent::ContextWindowSizeChanged { pct_used, .. },
+                ..
+            } if *pct_used >= 0.80 && *pct_used < 0.90 => {
                 let priority = self.rule_enabled("context_window_80pct")?.clone();
                 if self.context_fired.contains(session_id) {
                     return None;
@@ -152,12 +181,67 @@ impl RuleEngine {
                 })
             }
 
+            Event::AgentEvent {
+                event: AgentEvent::TurnFinished { tokens_used, .. },
+                ..
+            } => {
+                let priority = self.rule_enabled("high_token_burn")?.clone();
+                let now = crate::util::now_ms() as i64;
+                let five_min_ms = 5 * 60 * 1000_i64;
+
+                let history = self
+                    .token_history
+                    .entry(session_id.to_string())
+                    .or_default();
+                history.push_back((now, *tokens_used));
+
+                // Prune entries older than 5 minutes and cap at 100
+                while history
+                    .front()
+                    .map(|(ts, _)| now - ts > five_min_ms)
+                    .unwrap_or(false)
+                {
+                    history.pop_front();
+                }
+                while history.len() > 100 {
+                    history.pop_front();
+                }
+
+                let sum: u64 = history.iter().map(|(_, t)| *t as u64).sum();
+                if sum <= 50_000 {
+                    return None;
+                }
+
+                // Rate-limit: only fire once per 5 minutes per session
+                if let Some(&last) = self.token_burn_last_notified.get(session_id) {
+                    if now - last < five_min_ms {
+                        return None;
+                    }
+                }
+                self.token_burn_last_notified
+                    .insert(session_id.to_string(), now);
+
+                Some(Notification {
+                    title: "High token burn".to_string(),
+                    body: format!(
+                        "Session {} burned {} output tokens in 5 minutes",
+                        session_id, sum
+                    ),
+                    priority,
+                    click_url,
+                    tags: "fire".to_string(),
+                })
+            }
+
             _ => None,
         }
     }
 
     pub fn clear_session(&mut self, session_id: &str) {
         self.context_fired.remove(session_id);
+        self.approaching_ctx_fired.remove(session_id);
+        self.token_history.remove(session_id);
+        self.token_burn_last_notified.remove(session_id);
     }
 }
 
@@ -297,6 +381,17 @@ mod tests {
         }
     }
 
+    fn turn_finished(tokens: u32) -> Event {
+        Event::AgentEvent {
+            id: crate::session::SessionId::new(),
+            event: AgentEvent::TurnFinished {
+                turn_id: 1,
+                tokens_used: tokens,
+                duration_ms: 100,
+            },
+        }
+    }
+
     fn state_exited(from: SessionState) -> Event {
         Event::StateChanged {
             from,
@@ -399,5 +494,100 @@ mod tests {
         assert_eq!(time_from_epoch_days(0), "1970-01-01");
         // 2024-01-01 = day 19723
         assert_eq!(time_from_epoch_days(19723), "2024-01-01");
+    }
+
+    #[test]
+    fn test_approaching_context_window_fires_at_90pct() {
+        let mut engine = default_engine();
+        let notif = engine.evaluate("sess1", &context_window(0.92));
+        assert!(notif.is_some());
+        let notif = notif.unwrap();
+        assert!(notif.title.contains("90%"));
+    }
+
+    #[test]
+    fn test_approaching_context_window_dedup() {
+        let mut engine = default_engine();
+        let first = engine.evaluate("sess1", &context_window(0.92));
+        let second = engine.evaluate("sess1", &context_window(0.95));
+        assert!(first.is_some());
+        assert!(second.is_none());
+    }
+
+    #[test]
+    fn test_80pct_does_not_fire_at_90pct() {
+        let mut engine = default_engine();
+        let notif = engine.evaluate("sess1", &context_window(0.92)).unwrap();
+        assert!(
+            notif.title.contains("90%"),
+            "expected 90% rule, got: {}",
+            notif.title
+        );
+        assert!(!notif.title.contains("80%"));
+    }
+
+    #[test]
+    fn test_80pct_and_90pct_independent() {
+        let mut engine = default_engine();
+        let notif_80 = engine.evaluate("sess1", &context_window(0.85)).unwrap();
+        assert!(notif_80.title.contains("80%"));
+        let notif_90 = engine.evaluate("sess1", &context_window(0.92)).unwrap();
+        assert!(notif_90.title.contains("90%"));
+    }
+
+    #[test]
+    fn test_high_token_burn_fires() {
+        let mut engine = default_engine();
+        let mut fired = false;
+        for _ in 0..10 {
+            if engine.evaluate("sess1", &turn_finished(6000)).is_some() {
+                fired = true;
+            }
+        }
+        assert!(fired, "expected high_token_burn notification to fire");
+    }
+
+    #[test]
+    fn test_high_token_burn_below_threshold() {
+        let mut engine = default_engine();
+        for _ in 0..3 {
+            let notif = engine.evaluate("sess1", &turn_finished(1000));
+            assert!(notif.is_none());
+        }
+    }
+
+    #[test]
+    fn test_high_token_burn_rate_limited() {
+        let mut engine = default_engine();
+        // Fire the rule first time (need > 50k tokens)
+        let mut fired_count = 0usize;
+        for _ in 0..10 {
+            if engine.evaluate("sess1", &turn_finished(6000)).is_some() {
+                fired_count += 1;
+            }
+        }
+        // Only 1 notification should have fired (rate limited after first)
+        assert_eq!(fired_count, 1, "should only fire once within 5 minutes");
+    }
+
+    #[test]
+    fn test_clear_session_resets_all() {
+        let mut engine = default_engine();
+        // Fire 80% rule
+        engine.evaluate("sess1", &context_window(0.85));
+        // Fire 90% rule
+        engine.evaluate("sess1", &context_window(0.92));
+        // Fire token burn
+        for _ in 0..10 {
+            engine.evaluate("sess1", &turn_finished(6000));
+        }
+
+        engine.clear_session("sess1");
+
+        // All should fire again
+        let notif_80 = engine.evaluate("sess1", &context_window(0.85));
+        assert!(notif_80.is_some(), "80% should fire after clear");
+        let notif_90 = engine.evaluate("sess2", &context_window(0.92));
+        assert!(notif_90.is_some(), "90% should fire for new session");
     }
 }

@@ -1,7 +1,8 @@
 export type SessionKind =
 	| { type: 'shell' }
 	| { type: 'claude_code'; config_override?: string | null; project_dir?: string | null }
-	| { type: 'raw_bytes' };
+	| { type: 'raw_bytes' }
+	| { type: 'codex'; project_dir?: string | null };
 
 export type SessionState = 'booting' | 'idle' | 'streaming' | 'awaiting' | 'error' | 'exited';
 
@@ -103,3 +104,25 @@ export interface ReplayEvent {
 	kind: string;
 	event: Event;
 }
+export type LogLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export interface LogLine {
+	type: 'log';
+	source: string;
+	ts_us: number;
+	level: LogLevel;
+	body: string;
+	unit?: string;
+}
+
+export interface LogSource {
+	name: string;
+	kind: string;
+	active: boolean;
+}
+
+export type LogWsMessage =
+	| LogLine
+	| { type: 'initial_tail_complete' }
+	| { type: 'lagged'; dropped: number }
+	| { type: 'set_sources'; sources: string[] };

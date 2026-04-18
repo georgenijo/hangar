@@ -1,4 +1,4 @@
-import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind, SearchResult } from './types';
+import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind, SearchResult, LogSource } from './types';
 
 export class ApiError extends Error {
 	constructor(
@@ -99,6 +99,8 @@ export function kindLabel(k: SessionKind): string {
 			return 'Claude Code';
 		case 'raw_bytes':
 			return 'Raw Bytes';
+		case 'codex':
+			return 'Codex';
 	}
 }
 
@@ -121,6 +123,11 @@ export async function search(opts: {
 	return res.json();
 }
 
+export async function listLogSources(): Promise<LogSource[]> {
+	const res = await checkOk(await fetch('/api/v1/logs/sources'));
+	return res.json();
+}
+
 export function kindIcon(k: SessionKind): string {
 	switch (k.type) {
 		case 'shell':
@@ -129,5 +136,7 @@ export function kindIcon(k: SessionKind): string {
 			return 'bot';
 		case 'raw_bytes':
 			return 'binary';
+		case 'codex':
+			return 'bot';
 	}
 }

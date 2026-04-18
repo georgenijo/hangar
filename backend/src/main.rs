@@ -69,6 +69,15 @@ async fn main() -> Result<()> {
         }
     }
 
+    let config = hangard::config::load().unwrap_or_else(|e| {
+        warn!("config load failed: {e}, using defaults");
+        hangard::config::HangarConfig::default()
+    });
+
+    let mut logs_hub = hangard::logs::LogsHub::new(&config.logs, &sessions_dir);
+    logs_hub.start();
+    let logs_hub = Arc::new(logs_hub);
+
     let app_state = AppState {
         db,
         event_bus,
@@ -77,12 +86,9 @@ async fn main() -> Result<()> {
         sessions: sessions_registry,
         supervisor,
         start_time,
+        logs: logs_hub,
     };
 
-    let config = hangard::config::load().unwrap_or_else(|e| {
-        warn!("config load failed: {e}, using defaults");
-        hangard::config::HangarConfig::default()
-    });
     tokio::spawn(hangard::push::run(
         app_state.event_bus.clone(),
         app_state.db.clone(),
