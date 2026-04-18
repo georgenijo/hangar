@@ -226,29 +226,74 @@ impl Session {
         Ok(())
     }
 
-    /// Hard-delete a session and all events. Removes FTS rows first, then
-    /// events (FK), then the sessions row itself. Returns true if a row was
-    /// removed from `sessions`.
+    /// Hard-delete a session and all events. Removes FTS rows via the FTS5
+    /// 'delete' command (external-content tables cannot be updated via plain
+    /// DELETE), then removes events (FK), then the sessions row itself.
+    /// Returns true if a row was removed from `sessions`.
+    ///
+    /// Uses `BEGIN IMMEDIATE` to acquire the write lock up-front so the
+    /// connection's configured `busy_timeout` governs the contention
+    /// window — otherwise sqlx's default deferred transaction only notices
+    /// the concurrent writer on its first statement, after our inner
+    /// queries have already been submitted.
     pub async fn delete(pool: &SqlitePool, id: &SessionId) -> Result<bool> {
         let id_str = id.to_string();
-        let mut tx = pool.begin().await?;
+        let mut conn = pool.acquire().await?;
 
-        sqlx::query("DELETE FROM events_fts WHERE session_id = ?")
-            .bind(&id_str)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+        let result = Self::delete_inner(&mut conn, &id_str).await;
+        match result {
+            Ok(deleted) => {
+                sqlx::query("COMMIT").execute(&mut *conn).await?;
+                Ok(deleted)
+            }
+            Err(e) => {
+                let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                Err(e)
+            }
+        }
+    }
+
+    async fn delete_inner(
+        conn: &mut sqlx::SqliteConnection,
+        id_str: &str,
+    ) -> Result<bool> {
+        // events_fts is external-content (content='events'). A direct
+        // `DELETE FROM events_fts` yields SQLITE_CORRUPT_VTAB, so we emit
+        // the FTS5 'delete' command for each row belonging to this session.
+        // Rows with no body_text have no FTS entry to remove.
+        let fts_rows: Vec<(i64, Option<String>, String, String)> = sqlx::query_as(
+            "SELECT id, body_text, session_id, kind FROM events WHERE session_id = ?",
+        )
+        .bind(id_str)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        for (rowid, body_text, sid, kind) in &fts_rows {
+            if let Some(body) = body_text {
+                sqlx::query(
+                    "INSERT INTO events_fts(events_fts, rowid, body_text, session_id, kind) \
+                     VALUES ('delete', ?, ?, ?, ?)",
+                )
+                .bind(rowid)
+                .bind(body)
+                .bind(sid)
+                .bind(kind)
+                .execute(&mut *conn)
+                .await?;
+            }
+        }
 
         sqlx::query("DELETE FROM events WHERE session_id = ?")
-            .bind(&id_str)
-            .execute(&mut *tx)
+            .bind(id_str)
+            .execute(&mut *conn)
             .await?;
 
         let res = sqlx::query("DELETE FROM sessions WHERE id = ?")
-            .bind(&id_str)
-            .execute(&mut *tx)
+            .bind(id_str)
+            .execute(&mut *conn)
             .await?;
 
-        tx.commit().await?;
         Ok(res.rows_affected() > 0)
     }
 
