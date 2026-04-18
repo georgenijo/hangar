@@ -227,6 +227,8 @@
 		flex-direction: column;
 		background: var(--bg);
 		min-width: 0;
+	}
+
 	.sandbox-section {
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--border);
