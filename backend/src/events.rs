@@ -63,6 +63,9 @@ pub enum AgentEvent {
     SandboxMerged {
         snapshot_id: String,
     },
+    CostUpdated {
+        dollars: f64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,6 +147,7 @@ fn extract_searchable_text(event: &Event) -> Option<String> {
             AgentEvent::ContextWindowSizeChanged { .. } => None,
             AgentEvent::SandboxStateChanged { .. } => None,
             AgentEvent::SandboxMerged { .. } => None,
+            AgentEvent::CostUpdated { .. } => None,
         },
         Event::SessionCreated
         | Event::StateChanged { .. }

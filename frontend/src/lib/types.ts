@@ -65,6 +65,7 @@ export type AgentEvent =
 	| { type: 'model_changed'; model: string }
 	| { type: 'error'; message: string }
 	| { type: 'context_window_size_changed'; pct_used: number; tokens: number }
+	| { type: 'cost_updated'; dollars: number }
 	| { type: 'sandbox_state_changed'; state: SandboxState }
 	| { type: 'sandbox_merged'; snapshot_id: string };
 
