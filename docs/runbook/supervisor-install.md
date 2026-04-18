@@ -141,25 +141,34 @@ curl -s http://localhost:3000/api/v1/health | jq .supervisor_connected  # -> tru
 # 1. Create a shell session.
 SID=$(curl -sS -X POST http://localhost:3000/api/v1/sessions \
   -H 'content-type: application/json' \
-  -d '{"slug":"supervisor-smoke","kind":{"type":"shell"},"project_dir":"/home/george/Documents/hangar"}' \
-  | jq -r .session_id)
+  -d '{"slug":"sup-smoke","kind":{"type":"shell"}}' \
+  | jq -r .id)
 echo "session=$SID"
 
 # 2. Write something identifiable into the PTY.
+#    NB: the prompt endpoint's body field is `text`, not `prompt`.
 curl -sS -X POST "http://localhost:3000/api/v1/sessions/$SID/prompt" \
   -H 'content-type: application/json' \
-  -d '{"prompt":"echo HANGAR_SMOKE_$(date +%s) > /tmp/hangar-smoke.txt\n"}' >/dev/null
+  -d '{"text":"echo PRE_RESTART_$(date +%s) > /tmp/hangar-smoke.txt\n"}' >/dev/null
 
 # 3. Record pre-restart state.
 PID_BEFORE=$(pgrep -f 'target/release/hangard' | head -1)
 STATE_BEFORE=$(curl -s "http://localhost:3000/api/v1/sessions/$SID" | jq -r .state)
 echo "before: hangard_pid=$PID_BEFORE state=$STATE_BEFORE"
 
-# 4. Restart hangard. In dev (manual cargo run) send SIGTERM and restart it
-#    in its tmux pane; in prod use: systemctl --user restart hangar
+# 4. Restart hangard.
+#    Prod:  systemctl --user restart hangar
+#    Dev:   SIGTERM the manual hangard, then relaunch in its tmux pane:
 kill -TERM "$PID_BEFORE"
-# ...wait for the dev pane to relaunch hangard, or `systemctl --user restart hangar`
-sleep 5
+sleep 2
+tmux send-keys -t hangar-backend 'target/release/hangard' Enter
+# Poll until supervisor_connected is true again:
+for i in $(seq 1 20); do
+  sleep 1
+  CONN=$(curl -s --max-time 1 http://localhost:3000/api/v1/health \
+           | jq -r .supervisor_connected 2>/dev/null)
+  [ "$CONN" = "true" ] && break
+done
 
 # 5. Post-restart state.
 PID_AFTER=$(pgrep -f 'target/release/hangard' | head -1)
@@ -168,23 +177,50 @@ CONNECTED=$(curl -s http://localhost:3000/api/v1/health | jq -r .supervisor_conn
 echo "after:  hangard_pid=$PID_AFTER state=$STATE_AFTER supervisor_connected=$CONNECTED"
 
 # 6. Assertions.
-test "$PID_AFTER"    != "$PID_BEFORE"    && echo "OK: hangard pid changed"
-test "$STATE_AFTER"  =  "running"        && echo "OK: session still running"
-test "$CONNECTED"    =  "true"           && echo "OK: supervisor reconnected"
+test "$PID_AFTER"   != "$PID_BEFORE"           && echo "OK: hangard pid changed"
+test "$STATE_AFTER" != "exited"                && echo "OK: session not exited (state=$STATE_AFTER)"
+test "$CONNECTED"   =  "true"                  && echo "OK: supervisor reconnected"
 
 # 7. Prove the PTY still accepts writes.
 curl -sS -X POST "http://localhost:3000/api/v1/sessions/$SID/prompt" \
   -H 'content-type: application/json' \
-  -d '{"prompt":"cat /tmp/hangar-smoke.txt\n"}' >/dev/null
+  -d '{"text":"echo POST_RESTART_$(date +%s) >> /tmp/hangar-smoke.txt\n"}' >/dev/null
+sleep 1
+cat /tmp/hangar-smoke.txt   # expect BOTH a PRE_RESTART and POST_RESTART line
 ```
 
-Expected result: `hangard_pid` differs before/after, `state=running` both
-before and after, `supervisor_connected=true` after.
+Expected result: `hangard_pid` differs before/after; session `state` stays
+non-`exited` (canonical value is `idle` — `running` is an accepted alias);
+`supervisor_connected=true` after; `/tmp/hangar-smoke.txt` contains both a
+`PRE_RESTART_*` and `POST_RESTART_*` line, proving the same PTY fd was
+reattached by the new hangard.
 
 If `state` flips to `exited` after restart, do **not** fix in-place —
 file a detailed bug on #38 with: the two state payloads, `hangard` logs
 spanning the restart, and `journalctl --user -u hangar-supervisor` for
 the same window.
+
+### Recorded evidence (2026-04-18 optiplex)
+
+```
+BEFORE: hangard_pid=286405 state=idle
+(kill -TERM 286405; tmux send-keys 'target/release/hangard' Enter)
+AFTER:  hangard_pid=290669 state=idle supervisor_connected=true
+
+/tmp/hangar-smoke.txt:
+  PRE_RESTART_1776532174
+  POST_RESTART_1776532211
+
+hangard log (post-restart):
+  INFO hangard: connected to supervisor at ".../supervisor.sock"
+  INFO hangard: reattached session 01KPGS36GXXNHE7CSW...
+  INFO hangard: reattached session 01KPGQS843A5FAA09H...
+  INFO hangard: recovered 2 sessions from supervisor
+
+supervisor journal (spanning restart): spawn entry once, no
+"exited"/"reaped" for the smoke session — supervisor held the PTY fd
+across the hangard gap.
+```
 
 ---
 
