@@ -272,10 +272,9 @@ impl AgentDriver for ClaudeCodeDriver {
         let hook_url = format!("http://127.0.0.1:{port}/_cc_hook/{session_id}");
 
         let temp_dir = tempfile::TempDir::new()?;
-        let config_path = temp_dir.path().join("settings.json");
+        let settings_path = temp_dir.path().join("hangar-settings.json");
 
         let hooks_config = if let Some(override_path) = &config_override {
-            // Merge with override: read override, inject hooks
             let existing =
                 std::fs::read_to_string(override_path).unwrap_or_else(|_| "{}".to_string());
             let mut v: serde_json::Value =
@@ -286,24 +285,22 @@ impl AgentDriver for ClaudeCodeDriver {
             serde_json::json!({ "hooks": build_hooks_config(&hook_url) })
         };
 
-        std::fs::write(&config_path, serde_json::to_string_pretty(&hooks_config)?)?;
+        std::fs::write(&settings_path, serde_json::to_string_pretty(&hooks_config)?)?;
 
+        let settings_path_str = settings_path.to_string_lossy().into_owned();
         let temp_dir_path = temp_dir.path().to_path_buf();
-        // Keep temp_dir alive by leaking it — the process owns the lifetime
         std::mem::forget(temp_dir);
 
         let command = vec![
             "claude".to_string(),
             "--dangerously-skip-permissions".to_string(),
+            "--settings".to_string(),
+            settings_path_str,
         ];
 
         let mut env = req.env.clone();
         env.insert("HANGAR_SESSION_ID".to_string(), session_id);
         env.insert("HANGAR_HMAC_KEY".to_string(), hex::encode(&req.hmac_key));
-        env.insert(
-            "CLAUDE_CONFIG_DIR".to_string(),
-            temp_dir_path.to_string_lossy().into_owned(),
-        );
 
         let cwd = project_dir.unwrap_or_else(|| req.cwd.clone());
 
