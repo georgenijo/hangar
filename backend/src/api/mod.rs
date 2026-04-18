@@ -6,6 +6,7 @@ pub mod metrics;
 pub mod output;
 pub mod prompt;
 pub mod resize;
+pub mod search;
 pub mod sessions;
 
 use axum::{
@@ -61,6 +62,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/sessions/:id/merge-overlay",
             post(sessions::merge_overlay_handler),
         )
+        .route("/api/v1/search", get(search::search))
         .route("/api/v1/broadcast", post(broadcast::broadcast))
         .route("/api/v1/metrics", get(metrics::get_metrics))
         .route("/api/v1/logs/sources", get(logs::list_sources))

@@ -135,6 +135,21 @@ export interface CreateSessionRequest {
 	sandbox?: SandboxSpec;
 }
 
+export interface SearchResult {
+	event_id: number;
+	session_id: string;
+	ts: number;
+	kind: string;
+	snippet: string;
+	score: number;
+}
+
+export interface ReplayEvent {
+	id: number;
+	ts: number;
+	kind: string;
+	event: Event;
+}
 export type LogLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface LogLine {

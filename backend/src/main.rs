@@ -4,7 +4,13 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use tracing::{info, warn};
 
-use hangard::{api, db::Db, events::EventBus, session::SessionState, AppState};
+use hangard::{
+    api,
+    db::Db,
+    events::{EventBus, EventStore},
+    session::SessionState,
+    AppState,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,6 +25,11 @@ async fn main() -> Result<()> {
     std::fs::create_dir_all(&sessions_dir)?;
 
     let db = Db::new(Some(state_dir.join("hangar.db"))).await?;
+
+    let backfilled = EventStore::backfill_fts(db.pool()).await?;
+    if backfilled > 0 {
+        info!("backfilled FTS index for {} events", backfilled);
+    }
 
     let event_bus = Arc::new(EventBus::new());
     let sessions_registry: hangard::SessionRegistry = Arc::new(RwLock::new(HashMap::new()));

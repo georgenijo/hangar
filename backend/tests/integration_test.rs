@@ -1,6 +1,6 @@
 use hangard::{
     db::Db,
-    events::{Event, EventStore},
+    events::{AgentEvent, Event, EventStore},
     ringbuf::RingBuf,
     session::{Session, SessionId, SessionKind, SessionState},
 };
@@ -226,4 +226,413 @@ async fn test_agent_event_round_trip() {
             ..
         }
     ));
+}
+
+#[tokio::test]
+async fn test_fts_insert_and_search() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid = SessionId::new();
+    make_session(&sid).insert(pool).await.unwrap();
+    let sid_str = sid.to_string();
+
+    EventStore::insert(
+        pool,
+        &sid_str,
+        &Event::AgentEvent {
+            id: sid.clone(),
+            event: AgentEvent::ToolCallStarted {
+                turn_id: 1,
+                call_id: "c1".into(),
+                tool: "Bash".into(),
+                args_preview: "cargo build".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        pool,
+        &sid_str,
+        &Event::AgentEvent {
+            id: sid.clone(),
+            event: AgentEvent::Error {
+                message: "compilation failed".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        pool,
+        &sid_str,
+        &Event::AgentEvent {
+            id: sid.clone(),
+            event: AgentEvent::ToolCallFinished {
+                turn_id: 1,
+                call_id: "c1".into(),
+                ok: true,
+                result_preview: "success".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    let results = EventStore::search(pool, "cargo", None, None, 10, 0)
+        .await
+        .unwrap();
+    assert_eq!(results.len(), 1, "expected 1 result for 'cargo'");
+    assert!(
+        results[0].snippet.contains("<mark>"),
+        "snippet should contain <mark>"
+    );
+}
+
+#[tokio::test]
+async fn test_fts_cross_session_search() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid1 = SessionId::new();
+    let sid2 = SessionId::new();
+    make_session(&sid1).insert(pool).await.unwrap();
+    make_session(&sid2).insert(pool).await.unwrap();
+    let s1 = sid1.to_string();
+    let s2 = sid2.to_string();
+
+    EventStore::insert(
+        pool,
+        &s1,
+        &Event::AgentEvent {
+            id: sid1.clone(),
+            event: AgentEvent::Error {
+                message: "deploy failed in session one".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        pool,
+        &s2,
+        &Event::AgentEvent {
+            id: sid2.clone(),
+            event: AgentEvent::Error {
+                message: "deploy failed in session two".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    // Cross-session search — should return both
+    let all = EventStore::search(pool, "deploy", None, None, 10, 0)
+        .await
+        .unwrap();
+    assert_eq!(all.len(), 2, "expected 2 cross-session results");
+
+    // Filtered to session 1 only
+    let filtered = EventStore::search(pool, "deploy", Some(&[s1.as_str()]), None, 10, 0)
+        .await
+        .unwrap();
+    assert_eq!(filtered.len(), 1, "expected 1 result for session 1");
+    assert_eq!(filtered[0].session_id, s1);
+}
+
+#[tokio::test]
+async fn test_fts_kind_filter() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid = SessionId::new();
+    make_session(&sid).insert(pool).await.unwrap();
+    let sid_str = sid.to_string();
+
+    EventStore::insert(
+        pool,
+        &sid_str,
+        &Event::AgentEvent {
+            id: sid.clone(),
+            event: AgentEvent::Error {
+                message: "unique_keyword_xyz error".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    // StateChanged won't produce body_text, so only AgentEvent is indexed
+    let agent_results = EventStore::search(
+        pool,
+        "unique_keyword_xyz",
+        Some(&[]),
+        Some(&["AgentEvent"]),
+        10,
+        0,
+    )
+    .await
+    .unwrap();
+    assert_eq!(agent_results.len(), 1);
+
+    let other_results = EventStore::search(
+        pool,
+        "unique_keyword_xyz",
+        Some(&[]),
+        Some(&["StateChanged"]),
+        10,
+        0,
+    )
+    .await
+    .unwrap();
+    assert_eq!(other_results.len(), 0);
+}
+
+#[tokio::test]
+async fn test_fts_pagination() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid = SessionId::new();
+    make_session(&sid).insert(pool).await.unwrap();
+    let sid_str = sid.to_string();
+
+    for i in 0..15 {
+        EventStore::insert(
+            pool,
+            &sid_str,
+            &Event::AgentEvent {
+                id: sid.clone(),
+                event: AgentEvent::Error {
+                    message: format!("pagination_test_event number {i}"),
+                },
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let page1 = EventStore::search(pool, "pagination_test_event", None, None, 5, 0)
+        .await
+        .unwrap();
+    let page2 = EventStore::search(pool, "pagination_test_event", None, None, 5, 5)
+        .await
+        .unwrap();
+
+    assert_eq!(page1.len(), 5);
+    assert_eq!(page2.len(), 5);
+
+    let ids1: std::collections::HashSet<i64> = page1.iter().map(|r| r.event_id).collect();
+    let ids2: std::collections::HashSet<i64> = page2.iter().map(|r| r.event_id).collect();
+    assert!(
+        ids1.is_disjoint(&ids2),
+        "pages should have non-overlapping event ids"
+    );
+}
+
+#[tokio::test]
+async fn test_fts_backfill() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid = SessionId::new();
+    make_session(&sid).insert(pool).await.unwrap();
+    let sid_str = sid.to_string();
+
+    // Insert directly bypassing EventStore::insert to simulate pre-migration rows
+    let event = Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::Error {
+            message: "backfill_search_term".into(),
+        },
+    };
+    let body = rmp_serde::to_vec(&event).unwrap();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    sqlx::query("INSERT INTO events (session_id, ts, kind, body) VALUES (?, ?, ?, ?)")
+        .bind(&sid_str)
+        .bind(ts)
+        .bind("AgentEvent")
+        .bind(&body)
+        .execute(pool)
+        .await
+        .unwrap();
+
+    // Before backfill: search returns nothing
+    let before = EventStore::search(pool, "backfill_search_term", None, None, 10, 0)
+        .await
+        .unwrap();
+    assert_eq!(before.len(), 0, "no results before backfill");
+
+    // Run backfill
+    let count = EventStore::backfill_fts(pool).await.unwrap();
+    assert_eq!(count, 1, "expected 1 event backfilled");
+
+    // After backfill: search finds the event
+    let after = EventStore::search(pool, "backfill_search_term", None, None, 10, 0)
+        .await
+        .unwrap();
+    assert_eq!(after.len(), 1, "expected 1 result after backfill");
+}
+
+#[tokio::test]
+async fn test_fts_malformed_query() {
+    use hangard::events::SearchError;
+
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let result = EventStore::search(pool, "unbalanced \"quote", None, None, 10, 0).await;
+    assert!(result.is_err(), "malformed query should return error");
+    // Should be a BadQuery or Db error, not a panic
+    match result.unwrap_err() {
+        SearchError::BadQuery(_) | SearchError::Db(_) => {}
+    }
+}
+
+#[tokio::test]
+async fn test_extract_searchable_text_all_variants() {
+    use hangard::events::{extract_searchable_text_pub, AgentEvent, Event, TurnRole};
+
+    let sid = SessionId::new();
+
+    // TurnStarted with content
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::TurnStarted {
+            turn_id: 1,
+            role: TurnRole::User,
+            content_start: Some("hello".into()),
+        },
+    })
+    .is_some());
+
+    // TurnStarted without content
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::TurnStarted {
+            turn_id: 1,
+            role: TurnRole::User,
+            content_start: None,
+        },
+    })
+    .is_none());
+
+    // TurnFinished
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::TurnFinished {
+            turn_id: 1,
+            tokens_used: 100,
+            duration_ms: 500,
+        },
+    })
+    .is_none());
+
+    // ThinkingBlock
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::ThinkingBlock {
+            turn_id: 1,
+            len_chars: 200,
+        },
+    })
+    .is_none());
+
+    // ToolCallStarted
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::ToolCallStarted {
+            turn_id: 1,
+            call_id: "c1".into(),
+            tool: "Bash".into(),
+            args_preview: "ls".into(),
+        },
+    })
+    .is_some());
+
+    // ToolCallFinished with content
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::ToolCallFinished {
+            turn_id: 1,
+            call_id: "c1".into(),
+            ok: true,
+            result_preview: "done".into(),
+        },
+    })
+    .is_some());
+
+    // ToolCallFinished empty
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::ToolCallFinished {
+            turn_id: 1,
+            call_id: "c1".into(),
+            ok: true,
+            result_preview: "".into(),
+        },
+    })
+    .is_none());
+
+    // AwaitingPermission
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::AwaitingPermission {
+            tool: "Bash".into(),
+            prompt: "allow?".into(),
+        },
+    })
+    .is_some());
+
+    // ModelChanged
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::ModelChanged {
+            model: "claude-3".into(),
+        },
+    })
+    .is_some());
+
+    // Error
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::Error {
+            message: "oops".into(),
+        },
+    })
+    .is_some());
+
+    // ContextWindowSizeChanged
+    assert!(extract_searchable_text_pub(&Event::AgentEvent {
+        id: sid.clone(),
+        event: AgentEvent::ContextWindowSizeChanged {
+            pct_used: 50.0,
+            tokens: 1000,
+        },
+    })
+    .is_none());
+
+    // Non-agent variants
+    assert!(extract_searchable_text_pub(&Event::SessionCreated).is_none());
+    assert!(extract_searchable_text_pub(&Event::MetricsUpdated).is_none());
+    assert!(extract_searchable_text_pub(&Event::OutputAppended {
+        offset: 0,
+        len: 100
+    })
+    .is_none());
+    assert!(extract_searchable_text_pub(&Event::InputReceived { data: vec![] }).is_none());
+    assert!(extract_searchable_text_pub(&Event::Resized { cols: 80, rows: 24 }).is_none());
+    assert!(extract_searchable_text_pub(&Event::StateChanged {
+        from: hangard::session::SessionState::Idle,
+        to: hangard::session::SessionState::Exited,
+    })
+    .is_none());
 }

@@ -587,6 +587,7 @@ dependencies = [
  "hex",
  "hmac",
  "libc",
+ "libsqlite3-sys",
  "nix 0.29.0",
  "notify",
  "portable-pty",
