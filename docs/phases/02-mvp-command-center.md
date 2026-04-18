@@ -1,6 +1,6 @@
 # Phase 2 — MVP Command Center
 
-**Status:** ✅ Complete
+**Status:** ✅ Complete (supervisor rollout #8 landed 2026-04-18 — see Implementation notes below)
 
 ## Goal
 
@@ -27,7 +27,7 @@ Rust workspace (`cargo` single crate, split into modules):
 - `hangard` — binary with `tokio` runtime, `axum` HTTP server, `tower-http` middleware
 - `session` module — `Session`, `SessionKind`, `SessionState`, state machine, SQLite persistence
 - `pty` module — wraps `portable-pty`, owns child process lifecycle, exposes byte streams
-- `supervisor` — holds PTY fds across backend restart via Unix socket handoff (or falls back to systemd re-parenting; spike)
+- `supervisor` — holds PTY fds across backend restart via Unix socket handoff. Landed as a separate `hangar-supervisor` binary (option (a) from Risks below). Rolled out on 2026-04-18 (issues #8, #35, #36, #37, #38, #39). Install runbook: [`docs/runbook/supervisor-install.md`](../runbook/supervisor-install.md). ADR: [`0010`](../decisions/0010-sessions-survive-restart.md) (Accepted + Implemented).
 - `ringbuf` module — 100 MB per-session output ring file with offset/length API
 - `events` module — `Event` enum, persistent log, broadcast bus (`tokio::sync::broadcast`)
 - `drivers/shell.rs`, `drivers/claude_code.rs`, `drivers/raw_bytes.rs`
@@ -146,3 +146,16 @@ Each milestone should be a PR with its own tests.
 - Branching
 - Sandboxing
 - Multi-node registration
+
+## Implementation notes
+
+### Supervisor rollout (2026-04-18, #8 / #35–#39)
+
+The supervisor bullet in Deliverables was a phase-2 spike at merge time but wasn't enabled on the box — `hangard` logged `supervisor not available, sessions won't survive restart` on every startup until this rollout. Now live:
+
+- `hangar-supervisor.service` is a user-level systemd unit (`~/.config/systemd/user/`). See [`docs/runbook/supervisor-install.md`](../runbook/supervisor-install.md) for install/upgrade/rollback.
+- On dev boxes only `hangar-supervisor.service` is enabled; `hangar.service` is documented but left disabled so the manual `target/release/hangard` running in tmux doesn't race the unit for port 3000. Prod enables both.
+- Path/socket resolution is env-overridable (`HANGAR_STATE_DIR`, `HANGAR_SUPERVISOR_SOCK`). Added for the restart integration test; doubles as a way to run a second instance on the same box.
+- Survive-restart is covered by `backend/tests/supervisor_restart.rs` (integration) and by the smoke script in the runbook (manual).
+
+No deliberate divergences from the ADR beyond dropping the double-fork fallback — `PR_SET_CHILD_SUBREAPER` was enough in practice.

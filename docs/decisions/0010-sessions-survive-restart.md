@@ -1,7 +1,8 @@
 # ADR-0010: Sessions survive backend restart via supervisor pattern
 
-**Status:** Accepted
+**Status:** Accepted + Implemented
 **Date:** 2026-04-17
+**Implemented:** 2026-04-18 (branch `feat/supervisor-rollout`, parent issue #8)
 **Phase:** 2
 
 ## Context
@@ -36,3 +37,16 @@ Backend connects at startup, lists existing sessions, resumes event streams.
 ## Future work
 
 - Phase 2 spike: prototype supervisor first, validate fd handoff across backend restart before committing to full Phase 2 scope.
+
+## Implementation notes (2026-04-18)
+
+Landed behind #8 (rollout tickets #35 #36 #37 #38 #39).
+
+- Binary at `backend/src/bin/hangar-supervisor.rs`; protocol types in `backend/src/supervisor_protocol.rs`; client in `backend/src/supervisor_client.rs`.
+- Child-reaping path: `prctl(PR_SET_CHILD_SUBREAPER)` + an async `waitpid` loop. `KillMode=process` on the systemd unit so stopping the supervisor doesn't cascade-kill PTY children.
+- Runs as a **user** systemd unit (`systemd/hangar-supervisor.service`), not system-wide — socket lives at `$XDG_STATE_HOME/hangar/supervisor.sock` under the invoking user. Install runbook: [`docs/runbook/supervisor-install.md`](../runbook/supervisor-install.md).
+- Path/socket resolution is env-overridable via `HANGAR_STATE_DIR` + `HANGAR_SUPERVISOR_SOCK` (added for the integration test, also useful for second-instance dev).
+- On dev boxes, `hangar-supervisor.service` is enabled but `hangar.service` stays disabled because `hangard` is usually run manually from a tmux pane. Prod enables both.
+- Restart survival verified by `backend/tests/supervisor_restart.rs` (#37) and live on the optiplex box (#36 smoke run).
+
+Divergence from the ADR body: nothing material. The supervisor uses subreaper-only (no double-fork) because it's already the direct parent, and the parent-outlives-supervisor case is handled by systemd re-spawning the supervisor with `Restart=always`.
