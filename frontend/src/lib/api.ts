@@ -1,4 +1,4 @@
-import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind, SearchResult, LogSource } from './types';
+import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind, FsDiffResponse, LogSource, SearchResult } from './types';
 
 export class ApiError extends Error {
 	constructor(
@@ -102,6 +102,25 @@ export function kindLabel(k: SessionKind): string {
 		case 'codex':
 			return 'Codex';
 	}
+}
+
+export async function getFsDiff(
+	id: string,
+	opts?: { limit?: number; offset?: number }
+): Promise<FsDiffResponse> {
+	const params = new URLSearchParams();
+	if (opts?.limit) params.set('limit', String(opts.limit));
+	if (opts?.offset) params.set('offset', String(opts.offset));
+	const qs = params.toString();
+	const res = await checkOk(await fetch(`/api/v1/sessions/${id}/fsdiff${qs ? '?' + qs : ''}`));
+	return res.json();
+}
+
+export async function mergeOverlay(id: string): Promise<Session> {
+	const res = await checkOk(
+		await fetch(`/api/v1/sessions/${id}/merge-overlay`, { method: 'POST' })
+	);
+	return res.json();
 }
 
 export async function search(opts: {

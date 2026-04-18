@@ -23,6 +23,7 @@ fn make_session(id: &SessionId) -> Session {
         created_at: now,
         last_activity_at: now,
         exit: None,
+        sandbox: None,
     }
 }
 
@@ -154,6 +155,7 @@ async fn test_session_claude_code_kind_round_trip() {
         created_at: now,
         last_activity_at: now,
         exit: None,
+        sandbox: None,
     };
 
     session.insert(pool).await.unwrap();
@@ -195,6 +197,7 @@ async fn test_agent_event_round_trip() {
         created_at: now,
         last_activity_at: now,
         exit: None,
+        sandbox: None,
     };
     session.insert(pool).await.unwrap();
 

@@ -1,5 +1,9 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+
+use crate::sandbox::EgressRule;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -104,6 +108,56 @@ impl Default for PushConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SandboxDefaults {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_sandbox_image")]
+    pub default_image: String,
+    #[serde(default = "default_sandbox_cpu_quota")]
+    pub default_cpu_quota: f64,
+    #[serde(default = "default_sandbox_memory_mb")]
+    pub default_memory_limit_mb: u64,
+    #[serde(default = "default_overlay_base")]
+    pub overlay_base: PathBuf,
+    #[serde(default)]
+    pub default_egress_allowlist: Vec<EgressRule>,
+    #[serde(default)]
+    pub restic_repo: Option<String>,
+}
+
+fn default_sandbox_image() -> String {
+    "ubuntu:24.04".to_string()
+}
+
+fn default_sandbox_cpu_quota() -> f64 {
+    2.0
+}
+
+fn default_sandbox_memory_mb() -> u64 {
+    4096
+}
+
+fn default_overlay_base() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".local/state/hangar/overlays")
+}
+
+impl Default for SandboxDefaults {
+    fn default() -> Self {
+        SandboxDefaults {
+            enabled: false,
+            default_image: default_sandbox_image(),
+            default_cpu_quota: default_sandbox_cpu_quota(),
+            default_memory_limit_mb: default_sandbox_memory_mb(),
+            overlay_base: default_overlay_base(),
+            default_egress_allowlist: vec![],
+            restic_repo: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogSourceKind {
     Journalctl,
@@ -150,6 +204,8 @@ impl Default for LogsConfig {
 pub struct HangarConfig {
     #[serde(default)]
     pub push: PushConfig,
+    #[serde(default)]
+    pub sandbox: SandboxDefaults,
     #[serde(default)]
     pub logs: LogsConfig,
 }

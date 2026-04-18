@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { createSession } from '$lib/api';
-	import type { Session, SessionKind, LabelEntry } from '$lib/types';
+	import type { Session, SessionKind, LabelEntry, SandboxSpec, EgressRule } from '$lib/types';
 
 	let {
 		open,
@@ -20,6 +20,36 @@
 	let labels = $state<LabelEntry[]>([]);
 	let submitting = $state(false);
 	let errorMsg = $state<string | null>(null);
+
+	let sandboxEnabled = $state(false);
+	let sandboxImage = $state('ubuntu:24.04');
+	let sandboxCpuQuota = $state('');
+	let sandboxMemoryMb = $state('');
+	let sandboxEgress = $state('');
+	let sandboxAllocateTty = $state(false);
+
+	function parseEgressRules(raw: string): EgressRule[] {
+		return raw
+			.split('\n')
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0)
+			.flatMap((line) => {
+				const m = line.match(/^(.+):(\d+)\/(tcp|udp)$/i);
+				if (!m) return [];
+				return [{ host: m[1], port: parseInt(m[2], 10), proto: m[3].toLowerCase() as 'tcp' | 'udp' }];
+			});
+	}
+
+	function buildSandboxSpec(): SandboxSpec | undefined {
+		if (!sandboxEnabled) return undefined;
+		return {
+			image: sandboxImage || 'ubuntu:24.04',
+			cpu_quota: sandboxCpuQuota ? parseFloat(sandboxCpuQuota) : null,
+			memory_limit_mb: sandboxMemoryMb ? parseInt(sandboxMemoryMb, 10) : null,
+			egress_allowlist: parseEgressRules(sandboxEgress),
+			allocate_tty: sandboxAllocateTty
+		};
+	}
 
 	function buildKind(): SessionKind {
 		if (kindType === 'claude_code') {
@@ -53,7 +83,7 @@
 		}
 		submitting = true;
 		try {
-			const session = await createSession({ slug, kind: buildKind() });
+			const session = await createSession({ slug, kind: buildKind(), sandbox: buildSandboxSpec() });
 			oncreated(session);
 			await goto(`/session/${session.id}`);
 		} catch (e) {
@@ -150,6 +180,63 @@
 						</div>
 					{/if}
 				</div>
+
+				<fieldset class="field field-fieldset">
+					<legend class="field-legend">Sandbox</legend>
+					<label class="radio-option">
+						<input type="checkbox" bind:checked={sandboxEnabled} />
+						Enable sandbox (podman + overlayfs)
+					</label>
+					{#if sandboxEnabled}
+						<div class="sandbox-fields">
+							<div class="field">
+								<label for="sandbox-image">Image</label>
+								<input
+									id="sandbox-image"
+									type="text"
+									bind:value={sandboxImage}
+									placeholder="ubuntu:24.04"
+									autocomplete="off"
+								/>
+							</div>
+							<div class="field">
+								<label for="sandbox-cpu">CPU quota (fractional CPUs)</label>
+								<input
+									id="sandbox-cpu"
+									type="number"
+									step="0.5"
+									min="0.1"
+									bind:value={sandboxCpuQuota}
+									placeholder="2.0"
+								/>
+							</div>
+							<div class="field">
+								<label for="sandbox-mem">Memory limit (MB)</label>
+								<input
+									id="sandbox-mem"
+									type="number"
+									min="64"
+									bind:value={sandboxMemoryMb}
+									placeholder="4096"
+								/>
+							</div>
+							<div class="field">
+								<label for="sandbox-egress">Egress allowlist <span class="muted">(one per line: host:port/proto)</span></label>
+								<textarea
+									id="sandbox-egress"
+									bind:value={sandboxEgress}
+									rows="3"
+									placeholder="api.anthropic.com:443/tcp"
+								></textarea>
+								<span class="field-hint">Empty = no network (--network=none)</span>
+							</div>
+							<label class="radio-option">
+								<input type="checkbox" bind:checked={sandboxAllocateTty} />
+								Allocate TTY (for interactive shells)
+							</label>
+						</div>
+					{/if}
+				</fieldset>
 
 				{#if errorMsg}
 					<p class="error">{errorMsg}</p>
@@ -384,5 +471,45 @@
 
 	.btn-submit:not(:disabled):hover {
 		opacity: 0.85;
+	}
+
+	.sandbox-fields {
+		margin-top: 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	textarea {
+		width: 100%;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text);
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
+		padding: 8px 10px;
+		outline: none;
+		resize: vertical;
+	}
+
+	textarea:focus {
+		border-color: var(--accent);
+	}
+
+	input[type='number'] {
+		width: 100%;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text);
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
+		padding: 8px 10px;
+		outline: none;
+	}
+
+	input[type='number']:focus {
+		border-color: var(--accent);
 	}
 </style>
