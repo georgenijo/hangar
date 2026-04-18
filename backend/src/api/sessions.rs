@@ -189,8 +189,7 @@ pub async fn create_session(
 
     // Wire up CC hook channel so cc_hook_socket can deliver hook bodies to the driver.
     {
-        let (oob_tx, mut oob_rx) =
-            tokio::sync::mpsc::channel::<crate::drivers::OobMessage>(64);
+        let (oob_tx, mut oob_rx) = tokio::sync::mpsc::channel::<crate::drivers::OobMessage>(64);
         state
             .hook_channels
             .lock()

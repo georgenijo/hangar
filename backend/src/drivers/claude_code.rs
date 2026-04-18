@@ -21,7 +21,6 @@ static THINK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^thinking\.{0,3}$|^<thinking>").unwrap());
 static TOOL_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[⏺●•]\s+(\w+)\s*[\(\{]?(.*)").unwrap());
-static PROMPT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[❯>]\s").unwrap());
 static ERR_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^(?:error|api error|rate limit)[:\s](.+)").unwrap());
 // UNVERIFIED — needs fixture capture from real Claude Code session
