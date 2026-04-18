@@ -87,14 +87,16 @@
 	{/if}
 
 	<div class="session-body">
-		{#if session.kind.type === 'claude_code' || session.kind.type === 'codex'}
-			<div class="split">
-				<div class="split-pane chat-pane"><ChatView {session} /></div>
-				<div class="split-pane term-pane"><TerminalView {session} /></div>
-			</div>
-		{:else}
-			<TerminalView {session} />
-		{/if}
+		{#key session.id}
+			{#if session.kind.type === 'claude_code' || session.kind.type === 'codex'}
+				<div class="split">
+					<div class="split-pane chat-pane"><ChatView {session} /></div>
+					<div class="split-pane term-pane"><TerminalView {session} /></div>
+				</div>
+			{:else}
+				<TerminalView {session} />
+			{/if}
+		{/key}
 	</div>
 </div>
 
