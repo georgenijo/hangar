@@ -5,6 +5,7 @@ use axum::{
 };
 use serde::Deserialize;
 
+use crate::api::resolve_session;
 use crate::events::Event;
 use crate::AppState;
 
@@ -19,8 +20,11 @@ pub async fn resize_session(
     Path(id): Path<String>,
     Json(body): Json<ResizeRequest>,
 ) -> Result<StatusCode, StatusCode> {
+    let session = resolve_session(&state, &id).await?;
+    let ulid = session.id.to_string();
+
     let sessions = state.sessions.read().unwrap();
-    let active = sessions.get(&id).ok_or(StatusCode::NOT_FOUND)?;
+    let active = sessions.get(&ulid).ok_or(StatusCode::NOT_FOUND)?;
 
     active
         .master
@@ -28,7 +32,7 @@ pub async fn resize_session(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     state.event_bus.send(
-        id,
+        ulid,
         Event::Resized {
             cols: body.cols,
             rows: body.rows,

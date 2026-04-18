@@ -6,6 +6,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::api::resolve_session;
 use crate::{ringbuf::RingBuf, AppState};
 
 #[derive(Deserialize)]
@@ -19,7 +20,13 @@ pub async fn get_output(
     Query(params): Query<OutputQuery>,
     State(state): State<AppState>,
 ) -> Response {
-    let ring_path = state.ring_dir.join(&id).join("output.bin");
+    let session = match resolve_session(&state, &id).await {
+        Ok(s) => s,
+        Err(status) => return (status, "session not found").into_response(),
+    };
+    let ulid = session.id.to_string();
+
+    let ring_path = state.ring_dir.join(&ulid).join("output.bin");
 
     if !ring_path.exists() {
         return (StatusCode::NOT_FOUND, "session output not found").into_response();

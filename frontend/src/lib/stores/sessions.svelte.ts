@@ -63,6 +63,10 @@ export const sessionsStore = {
 		return sessions.find((s) => s.id === id);
 	},
 
+	removeSession(id: string) {
+		sessions = sessions.filter((s) => s.id !== id);
+	},
+
 	toggleLabelFilter(label: LabelEntry) {
 		const idx = selectedLabels.findIndex((l) => l.key === label.key && l.value === label.value);
 		if (idx >= 0) {
