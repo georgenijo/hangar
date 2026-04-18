@@ -226,6 +226,32 @@ impl Session {
         Ok(())
     }
 
+    /// Hard-delete a session and all events. Removes FTS rows first, then
+    /// events (FK), then the sessions row itself. Returns true if a row was
+    /// removed from `sessions`.
+    pub async fn delete(pool: &SqlitePool, id: &SessionId) -> Result<bool> {
+        let id_str = id.to_string();
+        let mut tx = pool.begin().await?;
+
+        sqlx::query("DELETE FROM events_fts WHERE session_id = ?")
+            .bind(&id_str)
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query("DELETE FROM events WHERE session_id = ?")
+            .bind(&id_str)
+            .execute(&mut *tx)
+            .await?;
+
+        let res = sqlx::query("DELETE FROM sessions WHERE id = ?")
+            .bind(&id_str)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(res.rows_affected() > 0)
+    }
+
     pub async fn update_sandbox(pool: &SqlitePool, id: &str, status: &SandboxStatus) -> Result<()> {
         let sandbox_json = serde_json::to_string(status)?;
         let now = std::time::SystemTime::now()

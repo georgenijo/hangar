@@ -313,11 +313,13 @@ pub async fn delete_session(
     let session = resolve_session(&state, &id).await?;
     let ulid = session.id.to_string();
 
+    // 1. Kill PTY: remove from active map and ask the driver to shut down
+    //    cleanly. Driver shutdown writes a termination sequence via the
+    //    master side; the read loop will then see EOF.
     let active = {
         let mut sessions = state.sessions.write().unwrap();
         sessions.remove(&ulid)
     };
-
     if let Some(active) = active {
         let writer_clone = std::sync::Arc::clone(&active.writer);
         let mut handle = PtyHandle::new(Box::new(WriterLock(writer_clone)));
@@ -325,24 +327,47 @@ pub async fn delete_session(
             .driver
             .lock()
             .unwrap()
-            .shutdown(&mut handle, Duration::from_secs(5));
+            .shutdown(&mut handle, Duration::from_secs(2));
     }
 
+    // 2. If held by supervisor, force-kill the child so the PID is reaped
+    //    regardless of whether the driver's graceful shutdown succeeded.
     if let Some(ref sup) = state.supervisor {
-        let _ = sup.kill(&ulid, libc::SIGTERM).await;
+        let _ = sup.kill(&ulid, libc::SIGKILL).await;
     }
 
-    Session::update_state(state.db.pool(), &session.id, SessionState::Exited)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // 3. Stop any sandbox container associated with the session.
+    if session.sandbox.is_some() {
+        if let Some(ref mgr) = state.sandbox_manager {
+            if let Err(e) = mgr.stop_container(&session.id).await {
+                tracing::warn!("stop_container during delete failed (non-fatal): {e}");
+            }
+            let _ = mgr.cleanup_overlay_dirs(&session.id);
+        }
+    }
 
-    state.event_bus.send(
-        ulid,
-        Event::StateChanged {
-            from: session.state,
-            to: SessionState::Exited,
-        },
-    );
+    // 4. Drop CC hook channel so the spawned hook-forwarder task exits.
+    state.hook_channels.lock().unwrap().remove(&ulid);
+
+    // 5. Delete DB rows (events + events_fts + sessions) in one transaction.
+    Session::delete(state.db.pool(), &session.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Session::delete failed for {ulid}: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    // 6. Remove the ring buffer directory on disk. Best-effort — if it is
+    //    missing, the row is already gone so the state is consistent.
+    let ring_session_dir = state.ring_dir.join(&ulid);
+    if ring_session_dir.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&ring_session_dir) {
+            tracing::warn!(
+                "failed to remove ring dir {}: {e}",
+                ring_session_dir.display()
+            );
+        }
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }
