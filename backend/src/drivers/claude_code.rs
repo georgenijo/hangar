@@ -57,6 +57,7 @@ pub struct ClaudeCodeDriver {
     last_model: Option<String>,
     last_tool_call: Option<String>,
     last_turn_start_ms: Option<u64>,
+    scraper: super::status_scraper::ScraperState,
 }
 
 impl ClaudeCodeDriver {
@@ -69,6 +70,7 @@ impl ClaudeCodeDriver {
             last_model: None,
             last_tool_call: None,
             last_turn_start_ms: None,
+            scraper: super::status_scraper::ScraperState::default(),
         }
     }
 
@@ -185,18 +187,6 @@ impl ClaudeCodeDriver {
                 });
                 self.parser_state = ParserState::Idle;
             }
-            return events;
-        }
-
-        // Turn start: prompt markers ❯ or > at start of line suggest user input prompt
-        if PROMPT_RE.is_match(clean) {
-            let turn_id = self.next_turn();
-            self.last_turn_start_ms = Some(util::now_ms());
-            events.push(AgentEvent::TurnStarted {
-                turn_id,
-                role: TurnRole::User,
-                content_start: None,
-            });
             return events;
         }
 
@@ -317,6 +307,10 @@ impl AgentDriver for ClaudeCodeDriver {
         self.line_buffer.push_str(&s);
 
         let mut events = Vec::new();
+
+        // Shared status-line scrape (TUI redraws don't emit newlines)
+        events.extend(super::status_scraper::scrape_status(&s, &mut self.scraper));
+
         while let Some(pos) = self.line_buffer.find('\n') {
             let line = self.line_buffer[..pos].to_string();
             self.line_buffer = self.line_buffer[pos + 1..].to_string();

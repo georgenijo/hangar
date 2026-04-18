@@ -143,6 +143,8 @@ function computeOutputCost(evs: StoredEvent[]): {
 } {
 	let totalTokens = 0;
 	let model: string | null = null;
+	let authoritativeCost: number | null = null;
+	let ctxTokens: number | null = null;
 
 	for (const storedEv of evs) {
 		if (storedEv.event.type !== 'agent_event') continue;
@@ -151,6 +153,10 @@ function computeOutputCost(evs: StoredEvent[]): {
 			totalTokens += ae.tokens_used;
 		} else if (ae.type === 'model_changed') {
 			model = ae.model;
+		} else if (ae.type === 'cost_updated') {
+			authoritativeCost = ae.dollars;
+		} else if (ae.type === 'context_window_size_changed') {
+			ctxTokens = ae.tokens;
 		}
 	}
 
@@ -158,9 +164,11 @@ function computeOutputCost(evs: StoredEvent[]): {
 		? Object.keys(OUTPUT_RATES).find((k) => model!.startsWith(k))
 		: undefined;
 	const rate = rateKey ? OUTPUT_RATES[rateKey] : DEFAULT_OUTPUT_RATE;
-	const estimatedCost = (totalTokens / 1000) * rate;
+	const estimatedCost =
+		authoritativeCost !== null ? authoritativeCost : (totalTokens / 1000) * rate;
+	const displayTokens = ctxTokens !== null ? ctxTokens : totalTokens;
 
-	return { totalTokens, estimatedCost, model };
+	return { totalTokens: displayTokens, estimatedCost, model };
 }
 
 function findCurrentModel(evs: StoredEvent[]): string | null {

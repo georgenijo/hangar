@@ -6,6 +6,19 @@
 		if (pct > 0.6) return '#ff9800';
 		return 'var(--accent)';
 	}
+
+	function modelCtxWindow(model: string | null): number {
+		if (!model) return 200_000;
+		// Opus 4.7 [1m] variant carries a 1M-context tag in the model id
+		if (/\[1m\]/i.test(model)) return 1_000_000;
+		return 200_000;
+	}
+
+	function formatTokens(n: number): string {
+		if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + 'M';
+		if (n >= 1_000) return Math.round(n / 1_000) + 'k';
+		return String(n);
+	}
 </script>
 
 <div class="sidebar">
@@ -21,7 +34,9 @@
 				</div>
 				<span class="ctx-pct">{Math.round(eventsStore.contextUsage.pctUsed * 100)}%</span>
 			</div>
-			<div class="muted">{eventsStore.contextUsage.tokens.toLocaleString()} tokens</div>
+			<div class="muted">
+				{formatTokens(eventsStore.contextUsage.tokens)} / {formatTokens(modelCtxWindow(eventsStore.outputCost.model))}
+			</div>
 		{:else}
 			<span class="muted">—</span>
 		{/if}
@@ -44,15 +59,17 @@
 			<ul class="tool-list">
 				{#each eventsStore.recentToolCalls as tc}
 					<li class="tool-item">
-						<span class="tool-name mono">{tc.tool}</span>
-						{#if tc.finished}
-							<span class="tool-status" class:ok={tc.ok} class:fail={!tc.ok}>
-								{tc.ok ? '✓' : '✗'}
-							</span>
-						{/if}
-						{#if tc.argsPreview}
-							<div class="tool-args muted">{tc.argsPreview.slice(0, 80)}</div>
-						{/if}
+						<div class="tool-cmd mono">
+							{tc.argsPreview ? tc.argsPreview.slice(0, 120) : tc.tool}
+						</div>
+						<div class="tool-meta">
+							<span class="tool-kind">{tc.tool}</span>
+							{#if tc.finished}
+								<span class="tool-status" class:ok={tc.ok} class:fail={!tc.ok}>
+									{tc.ok ? '✓' : '✗'}
+								</span>
+							{/if}
+						</div>
 					</li>
 				{/each}
 			</ul>
@@ -136,7 +153,7 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 8px;
 	}
 
 	.tool-item {
@@ -146,9 +163,24 @@
 		overflow: hidden;
 	}
 
-	.tool-name {
-		font-size: 0.75rem;
-		white-space: nowrap;
+	.tool-cmd {
+		font-size: 0.78rem;
+		color: var(--text);
+		word-break: break-word;
+		line-height: 1.35;
+	}
+
+	.tool-meta {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.65rem;
+		color: var(--text-muted);
+	}
+
+	.tool-kind {
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
 	}
 
 	.tool-status {
@@ -162,12 +194,5 @@
 
 	.tool-status.fail {
 		color: #f44336;
-	}
-
-	.tool-args {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		font-size: 0.7rem;
-		word-break: break-word;
 	}
 </style>

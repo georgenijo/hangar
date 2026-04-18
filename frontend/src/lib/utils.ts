@@ -27,7 +27,7 @@ export function stateColor(state: SessionState): string {
 		case 'booting':
 			return '#f5c518';
 		case 'idle':
-			return '#888';
+			return '#5b8bd4';
 		case 'streaming':
 			return '#4caf50';
 		case 'awaiting':
@@ -35,7 +35,7 @@ export function stateColor(state: SessionState): string {
 		case 'error':
 			return '#f44336';
 		case 'exited':
-			return '#555';
+			return '#3a3a3a';
 	}
 }
 

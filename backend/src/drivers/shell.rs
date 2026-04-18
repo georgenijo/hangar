@@ -7,11 +7,15 @@ use crate::session::SessionState;
 
 use super::{AgentDriver, OobMessage, PtyHandle, SpawnCfg, SpawnRequest, StateCtx};
 
-pub struct ShellDriver;
+pub struct ShellDriver {
+    scraper: super::status_scraper::ScraperState,
+}
 
 impl ShellDriver {
     pub fn new() -> Self {
-        Self
+        Self {
+            scraper: super::status_scraper::ScraperState::default(),
+        }
     }
 }
 
@@ -30,8 +34,9 @@ impl AgentDriver for ShellDriver {
         })
     }
 
-    fn on_bytes(&mut self, _bytes: &[u8]) -> Vec<AgentEvent> {
-        Vec::new()
+    fn on_bytes(&mut self, bytes: &[u8]) -> Vec<AgentEvent> {
+        let s = String::from_utf8_lossy(bytes);
+        super::status_scraper::scrape_all(&s, &mut self.scraper)
     }
 
     fn on_oob(&mut self, _msg: OobMessage) -> Vec<AgentEvent> {
