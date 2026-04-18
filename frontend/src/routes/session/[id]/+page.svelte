@@ -5,7 +5,6 @@
 	import { eventsStore } from '$lib/stores/events.svelte';
 	import { kindLabel, kindIcon } from '$lib/api';
 	import { stateColor } from '$lib/utils';
-	import ChatView from '$lib/components/ChatView.svelte';
 	import InsightsPanel from '$lib/components/InsightsPanel.svelte';
 	import TerminalView from '$lib/components/TerminalView.svelte';
 	import SandboxDiffView from '$lib/components/SandboxDiffView.svelte';
@@ -57,16 +56,6 @@
 		</div>
 	{/if}
 
-	{#if eventsStore.contextUsage}
-		<div class="context-bar">
-			<div
-				class="context-fill"
-				style="width: {eventsStore.contextUsage.pctUsed}%; background: {eventsStore.contextUsage.pctUsed > 80 ? '#f44336' : eventsStore.contextUsage.pctUsed > 60 ? '#ff9800' : 'var(--accent)'}"
-			></div>
-			<span class="context-label">{Math.round(eventsStore.contextUsage.pctUsed)}% context</span>
-		</div>
-	{/if}
-
 	{#if session.sandbox}
 		<div class="sandbox-section">
 			<div class="sandbox-header">
@@ -82,16 +71,12 @@
 		</div>
 	{/if}
 
-	{#if session.kind.type === 'claude_code' || session.kind.type === 'codex'}
-		<InsightsPanel />
-	{/if}
-
 	<div class="session-body">
 		{#key session.id}
 			{#if session.kind.type === 'claude_code' || session.kind.type === 'codex'}
 				<div class="split">
-					<div class="split-pane chat-pane"><ChatView {session} /></div>
-					<div class="split-pane term-pane"><TerminalView {session} /></div>
+					<div class="main-pane"><TerminalView {session} /></div>
+					<aside class="side-pane"><InsightsPanel /></aside>
 				</div>
 			{:else}
 				<TerminalView {session} />
@@ -187,26 +172,6 @@
 		border-radius: 3px;
 	}
 
-	.context-bar {
-		position: relative;
-		height: 4px;
-		background: var(--border);
-		flex-shrink: 0;
-	}
-
-	.context-fill {
-		height: 100%;
-		transition: width 0.5s;
-	}
-
-	.context-label {
-		position: absolute;
-		right: 8px;
-		top: 6px;
-		font-size: 0.7rem;
-		color: var(--text-muted);
-	}
-
 	.session-body {
 		flex: 1;
 		overflow: hidden;
@@ -217,18 +182,24 @@
 	.split {
 		flex: 1;
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr 280px;
 		gap: 1px;
 		background: var(--border);
 		overflow: hidden;
 	}
 
-	.split-pane {
+	.main-pane {
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
 		background: var(--bg);
 		min-width: 0;
+	}
+
+	.side-pane {
+		overflow-y: auto;
+		background: var(--surface, var(--bg));
+		border-left: 1px solid var(--border);
 	}
 
 	.sandbox-section {
