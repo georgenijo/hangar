@@ -521,18 +521,27 @@ impl AgentDriver for ClaudeCodeDriver {
     }
 }
 
-fn build_hooks_config(hook_url: &str) -> serde_json::Value {
-    let entry = serde_json::json!([{
-        "matcher": "",
-        "hooks": [{ "type": "http", "url": hook_url }]
-    }]);
+fn build_hooks_config(hook_base_url: &str) -> serde_json::Value {
+    let make_entry = |hook_name: &str| {
+        let url = format!("{}/{}", hook_base_url, hook_name);
+        serde_json::json!([{
+            "matcher": "",
+            "hooks": [{
+                "type": "command",
+                "command": format!(
+                    "curl -s -X POST -H 'Content-Type: application/json' --data @- '{}' >/dev/null 2>&1 || true",
+                    url
+                )
+            }]
+        }])
+    };
     serde_json::json!({
-        "PreToolUse": entry,
-        "PostToolUse": entry,
-        "Notification": entry,
-        "Stop": entry,
-        "SessionStart": entry,
-        "UserPromptSubmit": entry,
+        "PreToolUse": make_entry("PreToolUse"),
+        "PostToolUse": make_entry("PostToolUse"),
+        "Notification": make_entry("Notification"),
+        "Stop": make_entry("Stop"),
+        "SessionStart": make_entry("SessionStart"),
+        "UserPromptSubmit": make_entry("UserPromptSubmit"),
     })
 }
 
