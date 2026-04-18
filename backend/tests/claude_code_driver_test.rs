@@ -32,6 +32,7 @@ fn variant_name(e: &AgentEvent) -> &'static str {
         AgentEvent::ContextWindowSizeChanged { .. } => "context_window_size_changed",
         AgentEvent::SandboxStateChanged { .. } => "sandbox_state_changed",
         AgentEvent::SandboxMerged { .. } => "sandbox_merged",
+        AgentEvent::CostUpdated { .. } => "cost_updated",
     }
 }
 
@@ -202,12 +203,18 @@ fn test_spawn_cfg_builds_command() {
     };
     let cfg = d.spawn_cfg(&req).unwrap();
     assert!(cfg.command.contains(&"claude".to_string()));
-    assert!(cfg.command.contains(&"--config-dir".to_string()));
+    // CC driver switched from --config-dir to --settings in #33 ("drop phantom flags").
+    assert!(
+        cfg.command.contains(&"--settings".to_string()),
+        "expected --settings in command, got {:?}",
+        cfg.command
+    );
     assert!(!cfg.temp_files.is_empty());
 
-    // Verify settings.json was written
-    let settings_path = cfg.temp_files[0].join("settings.json");
-    let content = std::fs::read_to_string(&settings_path).unwrap();
+    // Verify hangar-settings.json was written with the hook config.
+    let settings_path = cfg.temp_files[0].join("hangar-settings.json");
+    let content = std::fs::read_to_string(&settings_path)
+        .unwrap_or_else(|e| panic!("read {:?}: {}", settings_path, e));
     let v: serde_json::Value = serde_json::from_str(&content).unwrap();
     assert!(v["hooks"]["PreToolUse"].is_array());
     assert!(v["hooks"]["Stop"].is_array());

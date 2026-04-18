@@ -2,17 +2,15 @@ pub mod claude_code;
 /// Claude TUI status-line scraper. Parses "CTX 3% 30k $0.11 | ... | claude-opus-4-7[1m] | ..."
 /// shared across drivers (both claude_code sessions and shells that host a claude process).
 pub mod status_scraper {
-    use std::sync::LazyLock;
-    use regex::Regex;
     use crate::events::AgentEvent;
     use crate::util;
+    use regex::Regex;
+    use std::sync::LazyLock;
 
-    static STATUS_RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"CTX\s*(\d+)%\s*(\d+)k\s*\$([\d.]+)").unwrap()
-    });
-    static STATUS_MODEL_RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\|\s+(claude-[A-Za-z0-9\-]+(?:\[\d+m?\])?)\s+\|").unwrap()
-    });
+    static STATUS_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"CTX\s*(\d+)%\s*(\d+)k\s*\$([\d.]+)").unwrap());
+    static STATUS_MODEL_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\|\s+(claude-[A-Za-z0-9\-]+(?:\[\d+m?\])?)\s+\|").unwrap());
 
     // Claude TUI cursor-positions the bullet glyph away from the tool name in the raw
     // byte stream, so anchor on known tool-name tokens instead.
