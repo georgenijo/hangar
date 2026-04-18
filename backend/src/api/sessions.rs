@@ -328,10 +328,22 @@ pub async fn delete_session(
             .lock()
             .unwrap()
             .shutdown(&mut handle, Duration::from_secs(2));
+
+        // Reap the PTY child to prevent it lingering as a zombie parented
+        // to hangard. std::process::Child does not reap on drop, so we
+        // must explicitly kill + wait. Runs off the request path so the
+        // 204 response is not blocked by the grace window.
+        if let Some(child_arc) = active.child.clone() {
+            tokio::task::spawn_blocking(move || {
+                pty::reap_child(child_arc, Duration::from_millis(500));
+            });
+        }
     }
 
     // 2. If held by supervisor, force-kill the child so the PID is reaped
     //    regardless of whether the driver's graceful shutdown succeeded.
+    //    The supervisor owns the child PID and reaps via its own SIGCHLD
+    //    handler, so we only signal here.
     if let Some(ref sup) = state.supervisor {
         let _ = sup.kill(&ulid, libc::SIGKILL).await;
     }

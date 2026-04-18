@@ -18,6 +18,36 @@ use crate::ringbuf::{RingBuf, DEFAULT_CAPACITY};
 use crate::sandbox::{SandboxState, SandboxStatus};
 use crate::session::{Session, SessionId, SessionState};
 
+/// Reap a PTY child process to prevent it lingering as a zombie.
+///
+/// `std::process::Child` (what portable_pty returns on Unix) does NOT call
+/// `waitpid` on drop, so hangard's `DELETE /sessions/:id` path used to leave
+/// `Zs` entries parented to hangard until hangard itself exited. See #51.
+///
+/// Strategy: poll `try_wait` during a grace window so cleanly-exiting
+/// children (driver.shutdown already sent ctrl-d / `/exit`) are reaped
+/// without an extra signal; if still alive at the deadline, `kill()` (which
+/// portable_pty escalates SIGHUP → SIGKILL internally) and then block on
+/// `wait()`.
+pub fn reap_child(child_arc: Arc<Mutex<Box<dyn Child + Send>>>, grace: Duration) {
+    let mut child = match child_arc.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    let deadline = std::time::Instant::now() + grace;
+    while std::time::Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(_) => break,
+        }
+    }
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 pub enum PtyMaster {
     Local(Arc<Mutex<Box<dyn MasterPty + Send>>>),
     Attached(Arc<Mutex<RawFdMaster>>),
