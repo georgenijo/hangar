@@ -142,13 +142,16 @@ fn extract_searchable_text(event: &Event) -> Option<String> {
             AgentEvent::ModelChanged { model } => Some(model.clone()),
             AgentEvent::Error { message } => Some(message.clone()),
             AgentEvent::ContextWindowSizeChanged { .. } => None,
+            AgentEvent::SandboxStateChanged { .. } => None,
+            AgentEvent::SandboxMerged { .. } => None,
         },
         Event::SessionCreated
         | Event::StateChanged { .. }
         | Event::OutputAppended { .. }
         | Event::InputReceived { .. }
         | Event::Resized { .. }
-        | Event::MetricsUpdated => None,
+        | Event::MetricsUpdated
+        | Event::OverlayDiffReady { .. } => None,
     }
 }
 
