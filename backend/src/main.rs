@@ -79,6 +79,10 @@ async fn main() -> Result<()> {
         None
     };
 
+    let mut logs_hub = hangard::logs::LogsHub::new(&config.logs, &sessions_dir);
+    logs_hub.start();
+    let logs_hub = Arc::new(logs_hub);
+
     let app_state = AppState {
         db,
         event_bus,
@@ -88,6 +92,7 @@ async fn main() -> Result<()> {
         supervisor,
         start_time,
         sandbox_manager,
+        logs: logs_hub,
     };
 
     tokio::spawn(hangard::push::run(

@@ -6,6 +6,7 @@
 	import { kindLabel, kindIcon } from '$lib/api';
 	import { stateColor } from '$lib/utils';
 	import ChatView from '$lib/components/ChatView.svelte';
+	import InsightsPanel from '$lib/components/InsightsPanel.svelte';
 	import TerminalView from '$lib/components/TerminalView.svelte';
 	import SandboxDiffView from '$lib/components/SandboxDiffView.svelte';
 
@@ -78,8 +79,12 @@
 		</div>
 	{/if}
 
+	{#if session.kind.type === 'claude_code' || session.kind.type === 'codex'}
+		<InsightsPanel />
+	{/if}
+
 	<div class="session-body">
-		{#if session.kind.type === 'claude_code'}
+		{#if session.kind.type === 'claude_code' || session.kind.type === 'codex'}
 			<ChatView {session} />
 		{:else}
 			<TerminalView {session} />

@@ -18,6 +18,10 @@ async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>) {
     // Keep tmpdir alive for the lifetime of the test by leaking it
     std::mem::forget(tmp);
 
+    let logs_config = hangard::config::LogsConfig::default();
+    let mut logs_hub = hangard::logs::LogsHub::new(&logs_config, &ring_dir);
+    logs_hub.start();
+
     let state = AppState {
         db,
         event_bus,
@@ -27,6 +31,7 @@ async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>) {
         supervisor: None,
         start_time: Instant::now(),
         sandbox_manager: None,
+        logs: Arc::new(logs_hub),
     };
 
     let router = api::router(state);

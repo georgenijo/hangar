@@ -53,6 +53,10 @@ pub enum SessionKind {
         project_dir: Option<PathBuf>,
     },
     RawBytes,
+    Codex {
+        #[serde(default)]
+        project_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -118,6 +122,7 @@ impl SessionKind {
             SessionKind::Shell => "shell",
             SessionKind::ClaudeCode { .. } => "claude_code",
             SessionKind::RawBytes => "raw_bytes",
+            SessionKind::Codex { .. } => "codex",
         }
     }
 }
@@ -308,6 +313,7 @@ impl Session {
                         project_dir: None,
                     }),
                     "raw_bytes" => Ok(SessionKind::RawBytes),
+                    "codex" => Ok(SessionKind::Codex { project_dir: None }),
                     other => anyhow::bail!("unknown session kind: {other}"),
                 }
             })?;

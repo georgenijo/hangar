@@ -1,3 +1,4 @@
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -5,8 +6,33 @@ use regex::Regex;
 
 use crate::events::{AgentEvent, TurnRole};
 use crate::session::{SessionKind, SessionState};
+use crate::util;
 
 use super::{AgentDriver, OobMessage, PtyHandle, SpawnCfg, SpawnRequest, StateCtx};
+
+static MODEL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(?:using\s+)?model:\s*(\S+)").unwrap());
+static CTX_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)context\s+window[:\s]*(\d+)%.*?(\d[\d,]*)\s+tokens?").unwrap()
+});
+static PERM_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(?:allow|deny|permission)[^\n]*?(\w+)[^\n]*\?").unwrap());
+static THINK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^thinking\.{0,3}$|^<thinking>").unwrap());
+static TOOL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[⏺●•]\s+(\w+)\s*[\(\{]?(.*)").unwrap());
+static PROMPT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[❯>]\s").unwrap());
+static ERR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^(?:error|api error|rate limit)[:\s](.+)").unwrap());
+// UNVERIFIED — needs fixture capture from real Claude Code session
+static COMPACT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)compact(?:ing|ed|ion)").unwrap());
+// UNVERIFIED — needs fixture capture
+static SUBAGENT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(?:spawning|starting)\s+(?:sub-?agent|task)").unwrap());
+// UNVERIFIED — needs fixture capture
+static THINK_BUDGET_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)thinking\s+budget\s+(?:exceeded|exhausted|limit)").unwrap());
 
 #[derive(Debug, PartialEq, Clone)]
 enum ParserState {
@@ -51,34 +77,13 @@ impl ClaudeCodeDriver {
         self.turn_counter
     }
 
-    fn strip_ansi(s: &str) -> String {
-        // CSI sequences: ESC [ ... letter
-        let csi = Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
-        // OSC sequences: ESC ] ... BEL
-        let osc = Regex::new(r"\x1b\].*?\x07").unwrap();
-        // Remaining bare ESC sequences (ESC + one char)
-        let esc = Regex::new(r"\x1b.").unwrap();
-        let s = csi.replace_all(s, "");
-        let s = osc.replace_all(&s, "");
-        let s = esc.replace_all(&s, "");
-        s.into_owned()
-    }
-
-    fn now_ms() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64
-    }
-
     fn process_line(&mut self, line: &str) -> Vec<AgentEvent> {
-        let clean = Self::strip_ansi(line);
+        let clean = util::strip_ansi(line);
         let clean = clean.trim();
         let mut events = Vec::new();
 
         // Model detection
-        let model_re = Regex::new(r"(?i)(?:using\s+)?model:\s*(\S+)").unwrap();
-        if let Some(cap) = model_re.captures(clean) {
+        if let Some(cap) = MODEL_RE.captures(clean) {
             let model = cap[1].to_string();
             self.last_model = Some(model.clone());
             events.push(AgentEvent::ModelChanged { model });
@@ -86,9 +91,7 @@ impl ClaudeCodeDriver {
         }
 
         // Context window: "Context window: 50% (100,000 tokens)"
-        let ctx_re =
-            Regex::new(r"(?i)context\s+window[:\s]*(\d+)%.*?(\d[\d,]*)\s+tokens?").unwrap();
-        if let Some(cap) = ctx_re.captures(clean) {
+        if let Some(cap) = CTX_RE.captures(clean) {
             let pct: f32 = cap[1].parse::<f32>().unwrap_or(0.0) / 100.0;
             let tokens_str = cap[2].replace(',', "");
             let tokens: u64 = tokens_str.parse().unwrap_or(0);
@@ -100,8 +103,7 @@ impl ClaudeCodeDriver {
         }
 
         // Permission prompt: CC shows "Allow [tool]?" or "Do you want to allow..."
-        let perm_re = Regex::new(r"(?i)(?:allow|deny|permission)[^\n]*?(\w+)[^\n]*\?").unwrap();
-        if let Some(cap) = perm_re.captures(clean) {
+        if let Some(cap) = PERM_RE.captures(clean) {
             let tool = cap[1].to_string();
             let prompt = clean.to_string();
             self.parser_state = ParserState::AwaitingInput;
@@ -110,8 +112,7 @@ impl ClaudeCodeDriver {
         }
 
         // Thinking block start: "Thinking..." or extended thinking markers
-        let think_re = Regex::new(r"(?i)^thinking\.{0,3}$|^<thinking>").unwrap();
-        if think_re.is_match(clean) {
+        if THINK_RE.is_match(clean) {
             let turn_id = self.turn_counter;
             self.parser_state = ParserState::InThinkingBlock {
                 turn_id,
@@ -148,8 +149,7 @@ impl ClaudeCodeDriver {
         }
 
         // Tool call: CC uses "⏺ ToolName(..." pattern
-        let tool_re = Regex::new(r"^[⏺●•]\s+(\w+)\s*[\(\{]?(.*)").unwrap();
-        if let Some(cap) = tool_re.captures(clean) {
+        if let Some(cap) = TOOL_RE.captures(clean) {
             let tool = cap[1].to_string();
             let args_preview = cap[2].chars().take(100).collect::<String>();
             let turn_id = self.turn_counter;
@@ -189,10 +189,9 @@ impl ClaudeCodeDriver {
         }
 
         // Turn start: prompt markers ❯ or > at start of line suggest user input prompt
-        let prompt_re = Regex::new(r"^[❯>]\s").unwrap();
-        if prompt_re.is_match(clean) {
+        if PROMPT_RE.is_match(clean) {
             let turn_id = self.next_turn();
-            self.last_turn_start_ms = Some(Self::now_ms());
+            self.last_turn_start_ms = Some(util::now_ms());
             events.push(AgentEvent::TurnStarted {
                 turn_id,
                 role: TurnRole::User,
@@ -202,10 +201,40 @@ impl ClaudeCodeDriver {
         }
 
         // Error patterns
-        let err_re = Regex::new(r"(?i)^(?:error|api error|rate limit)[:\s](.+)").unwrap();
-        if let Some(cap) = err_re.captures(clean) {
+        if let Some(cap) = ERR_RE.captures(clean) {
             events.push(AgentEvent::Error {
                 message: cap[1].to_string(),
+            });
+            return events;
+        }
+
+        // UNVERIFIED — compaction line format needs fixture capture
+        if COMPACT_RE.is_match(clean) {
+            events.push(AgentEvent::ContextWindowSizeChanged {
+                pct_used: 0.0,
+                tokens: 0,
+            });
+            return events;
+        }
+
+        // UNVERIFIED — subagent spawn format needs fixture capture
+        if SUBAGENT_RE.is_match(clean) {
+            let args_preview = clean.chars().take(100).collect::<String>();
+            let turn_id = self.turn_counter;
+            let call_id = format!("{}-subagent", turn_id);
+            events.push(AgentEvent::ToolCallStarted {
+                turn_id,
+                call_id,
+                tool: "subagent".to_string(),
+                args_preview,
+            });
+            return events;
+        }
+
+        // UNVERIFIED — thinking budget exhaustion format needs fixture capture
+        if THINK_BUDGET_RE.is_match(clean) {
+            events.push(AgentEvent::Error {
+                message: clean.to_string(),
             });
             return events;
         }
@@ -306,7 +335,7 @@ impl AgentDriver for ClaudeCodeDriver {
         match msg.hook.as_str() {
             "SessionStart" => {
                 let turn_id = self.next_turn();
-                self.last_turn_start_ms = Some(Self::now_ms());
+                self.last_turn_start_ms = Some(util::now_ms());
                 events.push(AgentEvent::TurnStarted {
                     turn_id,
                     role: TurnRole::System,
@@ -322,7 +351,7 @@ impl AgentDriver for ClaudeCodeDriver {
 
             "UserPromptSubmit" => {
                 let turn_id = self.next_turn();
-                self.last_turn_start_ms = Some(Self::now_ms());
+                self.last_turn_start_ms = Some(util::now_ms());
                 let content_start = msg
                     .payload
                     .get("prompt")
@@ -445,7 +474,7 @@ impl AgentDriver for ClaudeCodeDriver {
                     .unwrap_or(0) as u32;
                 let duration_ms = self
                     .last_turn_start_ms
-                    .map(|start| (Self::now_ms() - start) as u32)
+                    .map(|start| (util::now_ms() - start) as u32)
                     .unwrap_or(0);
                 self.last_turn_start_ms = None;
                 events.push(AgentEvent::TurnFinished {
@@ -635,6 +664,8 @@ mod tests {
             current_state: SessionState::Idle,
             last_activity_ms: 0,
             last_event: None,
+            last_bytes_ms: 0,
+            event_timestamps: vec![],
         };
         assert_eq!(d.detect_state(&ctx), Some(SessionState::Awaiting));
     }
@@ -650,6 +681,8 @@ mod tests {
                 tokens_used: 0,
                 duration_ms: 0,
             }),
+            last_bytes_ms: 0,
+            event_timestamps: vec![],
         };
         assert_eq!(d.detect_state(&ctx), Some(SessionState::Idle));
     }
@@ -665,6 +698,8 @@ mod tests {
                 role: TurnRole::Assistant,
                 content_start: None,
             }),
+            last_bytes_ms: 0,
+            event_timestamps: vec![],
         };
         assert_eq!(d.detect_state(&ctx), Some(SessionState::Streaming));
     }
@@ -677,6 +712,8 @@ mod tests {
             current_state: SessionState::Awaiting,
             last_activity_ms: 0,
             last_event: None,
+            last_bytes_ms: 0,
+            event_timestamps: vec![],
         };
         assert_eq!(d.detect_state(&ctx), None);
     }

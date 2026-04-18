@@ -1,6 +1,9 @@
+use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::Result;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
@@ -8,7 +11,7 @@ use sqlx::SqlitePool;
 use std::os::unix::io::OwnedFd;
 use tokio::sync::broadcast;
 
-use crate::drivers::{AgentDriver, SpawnCfg};
+use crate::drivers::{AgentDriver, SpawnCfg, StateCtx};
 use crate::events::{AgentEvent, Event, EventBus};
 use crate::raw_fd_master::RawFdMaster;
 use crate::ringbuf::{RingBuf, DEFAULT_CAPACITY};
@@ -59,6 +62,126 @@ pub struct ActiveSession {
     pub created_at: i64,
 }
 
+pub struct ReaderLoopCtx {
+    pub session_id: SessionId,
+    pub driver: Arc<Mutex<Box<dyn AgentDriver>>>,
+    pub event_bus: Arc<EventBus>,
+    pub output_tx: broadcast::Sender<Vec<u8>>,
+    pub ring_buf: RingBuf,
+    pub last_bytes_ms: Arc<AtomicI64>,
+    pub current_state: Arc<Mutex<SessionState>>,
+}
+
+fn run_reader_loop(
+    mut reader: Box<dyn Read + Send>,
+    mut ctx: ReaderLoopCtx,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    ctx.last_bytes_ms
+                        .store(crate::util::now_ms() as i64, Ordering::Relaxed);
+                    let chunk = buf[..n].to_vec();
+                    if let Ok((offset, len)) = ctx.ring_buf.write(&chunk) {
+                        ctx.event_bus.send(
+                            ctx.session_id.to_string(),
+                            Event::OutputAppended { offset, len },
+                        );
+                    }
+                    let events = ctx.driver.lock().unwrap().on_bytes(&chunk);
+                    for evt in events {
+                        ctx.event_bus.send(
+                            ctx.session_id.to_string(),
+                            Event::AgentEvent {
+                                id: ctx.session_id.clone(),
+                                event: evt,
+                            },
+                        );
+                    }
+                    let _ = ctx.output_tx.send(chunk);
+                }
+            }
+        }
+        let _ = ctx.ring_buf.sync();
+    })
+}
+
+fn spawn_watchdog(
+    session_id: SessionId,
+    driver: Arc<Mutex<Box<dyn AgentDriver>>>,
+    event_bus: Arc<EventBus>,
+    last_bytes_ms: Arc<AtomicI64>,
+    current_state: Arc<Mutex<SessionState>>,
+    db_pool: SqlitePool,
+    mut event_rx: broadcast::Receiver<(String, Event)>,
+) -> std::thread::JoinHandle<()> {
+    let handle = tokio::runtime::Handle::current();
+    std::thread::spawn(move || {
+        let mut last_event: Option<AgentEvent> = None;
+        let mut event_timestamps: VecDeque<i64> = VecDeque::new();
+        let mut last_activity_ms: i64 = 0;
+        let sid_str = session_id.to_string();
+
+        loop {
+            std::thread::sleep(Duration::from_secs(5));
+
+            // Drain pending events from bus
+            loop {
+                match event_rx.try_recv() {
+                    Ok((sid, Event::AgentEvent { event, .. })) if sid == sid_str => {
+                        last_event = Some(event);
+                        let ts = crate::util::now_ms() as i64;
+                        event_timestamps.push_back(ts);
+                        if event_timestamps.len() > 20 {
+                            event_timestamps.pop_front();
+                        }
+                        last_activity_ms = ts;
+                    }
+                    Ok(_) => {}
+                    Err(broadcast::error::TryRecvError::Empty) => break,
+                    Err(broadcast::error::TryRecvError::Lagged(_)) => break,
+                    Err(broadcast::error::TryRecvError::Closed) => return,
+                }
+            }
+
+            let current = current_state.lock().unwrap().clone();
+            if current == SessionState::Exited {
+                break;
+            }
+
+            let ctx = StateCtx {
+                current_state: current.clone(),
+                last_activity_ms,
+                last_event: last_event.clone(),
+                last_bytes_ms: last_bytes_ms.load(Ordering::Relaxed),
+                event_timestamps: event_timestamps.iter().copied().collect(),
+            };
+
+            if let Some(new_state) = driver.lock().unwrap().detect_state(&ctx) {
+                if new_state != current {
+                    let old_state = current.clone();
+                    *current_state.lock().unwrap() = new_state.clone();
+                    let _ = handle.block_on(crate::session::Session::update_state(
+                        &db_pool,
+                        &session_id,
+                        new_state.clone(),
+                    ));
+                    event_bus.send(
+                        sid_str.clone(),
+                        Event::StateChanged {
+                            from: old_state,
+                            to: new_state,
+                        },
+                    );
+                }
+            }
+        }
+    })
+}
+
 pub fn spawn_pty(
     session_id: SessionId,
     spawn_cfg: SpawnCfg,
@@ -94,53 +217,49 @@ pub fn spawn_pty(
     let (output_tx, _) = broadcast::channel::<Vec<u8>>(256);
 
     let ring_path = ring_dir.join(session_id.as_ref()).join("output.bin");
-    let mut ring_buf = RingBuf::create(&ring_path, DEFAULT_CAPACITY)?;
+    let ring_buf = RingBuf::create(&ring_path, DEFAULT_CAPACITY)?;
+
+    let last_bytes_ms = Arc::new(AtomicI64::new(0));
+    let current_state = Arc::new(Mutex::new(SessionState::Booting));
 
     let driver = Arc::new(Mutex::new(driver));
-    let driver_clone = Arc::clone(&driver);
-    let output_tx_clone = output_tx.clone();
-    let event_bus_clone = Arc::clone(&event_bus);
-    let sid = session_id.clone();
 
-    let reader_handle = std::thread::spawn(move || {
-        let mut reader = reader;
-        let mut buf = [0u8; 8192];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    let chunk = buf[..n].to_vec();
-                    if let Ok((offset, len)) = ring_buf.write(&chunk) {
-                        event_bus_clone
-                            .send(sid.to_string(), Event::OutputAppended { offset, len });
-                    }
-                    let events = driver_clone.lock().unwrap().on_bytes(&chunk);
-                    for evt in events {
-                        event_bus_clone.send(
-                            sid.to_string(),
-                            Event::AgentEvent {
-                                id: sid.clone(),
-                                event: evt,
-                            },
-                        );
-                    }
-                    let _ = output_tx_clone.send(chunk);
-                }
-            }
-        }
-        let _ = ring_buf.sync();
-    });
+    let reader_ctx = ReaderLoopCtx {
+        session_id: session_id.clone(),
+        driver: Arc::clone(&driver),
+        event_bus: Arc::clone(&event_bus),
+        output_tx: output_tx.clone(),
+        ring_buf,
+        last_bytes_ms: Arc::clone(&last_bytes_ms),
+        current_state: Arc::clone(&current_state),
+    };
+
+    let reader_handle = run_reader_loop(reader, reader_ctx);
+
+    let event_rx = event_bus.subscribe();
+    let _watchdog = spawn_watchdog(
+        session_id.clone(),
+        Arc::clone(&driver),
+        Arc::clone(&event_bus),
+        Arc::clone(&last_bytes_ms),
+        Arc::clone(&current_state),
+        db.clone(),
+        event_rx,
+    );
 
     let cleanup_sid = session_id.clone();
     let cleanup_bus = Arc::clone(&event_bus);
+    let current_state_cleanup = Arc::clone(&current_state);
     tokio::spawn(async move {
         let _ = tokio::task::spawn_blocking(move || reader_handle.join()).await;
+        let from = current_state_cleanup.lock().unwrap().clone();
+        *current_state_cleanup.lock().unwrap() = SessionState::Exited;
         let _ =
             crate::session::Session::update_state(&db, &cleanup_sid, SessionState::Exited).await;
         cleanup_bus.send(
             cleanup_sid.to_string(),
             Event::StateChanged {
-                from: SessionState::Idle,
+                from,
                 to: SessionState::Exited,
             },
         );
@@ -261,53 +380,48 @@ pub fn reattach(
 
     let (output_tx, _) = broadcast::channel::<Vec<u8>>(256);
 
+    let last_bytes_ms = Arc::new(AtomicI64::new(0));
+    let current_state = Arc::new(Mutex::new(SessionState::Booting));
+
     let driver = Arc::new(Mutex::new(driver));
-    let driver_clone = Arc::clone(&driver);
-    let output_tx_clone = output_tx.clone();
-    let event_bus_clone = Arc::clone(&event_bus);
-    let sid = session_id.clone();
 
-    let mut reader = RawFdMaster::new(read_fd);
-    let mut ring_buf = ring_buf;
+    let reader_ctx = ReaderLoopCtx {
+        session_id: session_id.clone(),
+        driver: Arc::clone(&driver),
+        event_bus: Arc::clone(&event_bus),
+        output_tx: output_tx.clone(),
+        ring_buf,
+        last_bytes_ms: Arc::clone(&last_bytes_ms),
+        current_state: Arc::clone(&current_state),
+    };
 
-    let reader_handle = std::thread::spawn(move || {
-        let mut buf = [0u8; 8192];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    let chunk = buf[..n].to_vec();
-                    if let Ok((offset, len)) = ring_buf.write(&chunk) {
-                        event_bus_clone
-                            .send(sid.to_string(), Event::OutputAppended { offset, len });
-                    }
-                    let events = driver_clone.lock().unwrap().on_bytes(&chunk);
-                    for evt in events {
-                        event_bus_clone.send(
-                            sid.to_string(),
-                            Event::AgentEvent {
-                                id: sid.clone(),
-                                event: evt,
-                            },
-                        );
-                    }
-                    let _ = output_tx_clone.send(chunk);
-                }
-            }
-        }
-        let _ = ring_buf.sync();
-    });
+    let reader = Box::new(RawFdMaster::new(read_fd));
+    let reader_handle = run_reader_loop(reader, reader_ctx);
+
+    let event_rx = event_bus.subscribe();
+    let _watchdog = spawn_watchdog(
+        session_id.clone(),
+        Arc::clone(&driver),
+        Arc::clone(&event_bus),
+        Arc::clone(&last_bytes_ms),
+        Arc::clone(&current_state),
+        db.clone(),
+        event_rx,
+    );
 
     let cleanup_sid = session_id.clone();
     let cleanup_bus = Arc::clone(&event_bus);
+    let current_state_cleanup = Arc::clone(&current_state);
     tokio::spawn(async move {
         let _ = tokio::task::spawn_blocking(move || reader_handle.join()).await;
+        let from = current_state_cleanup.lock().unwrap().clone();
+        *current_state_cleanup.lock().unwrap() = SessionState::Exited;
         let _ =
             crate::session::Session::update_state(&db, &cleanup_sid, SessionState::Exited).await;
         cleanup_bus.send(
             cleanup_sid.to_string(),
             Event::StateChanged {
-                from: SessionState::Idle,
+                from,
                 to: SessionState::Exited,
             },
         );

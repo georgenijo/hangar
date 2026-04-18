@@ -82,6 +82,16 @@ fn default_rules() -> Vec<PushRule> {
             enabled: true,
             priority: NtfyPriority::Normal,
         },
+        PushRule {
+            name: "high_token_burn".to_string(),
+            enabled: true,
+            priority: NtfyPriority::Normal,
+        },
+        PushRule {
+            name: "approaching_context_window".to_string(),
+            enabled: true,
+            priority: NtfyPriority::High,
+        },
     ]
 }
 
@@ -147,12 +157,57 @@ impl Default for SandboxDefaults {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LogSourceKind {
+    Journalctl,
+    Unit,
+    File,
+    PaneScrollback,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LogSourceConfig {
+    pub name: String,
+    pub kind: LogSourceKind,
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
+}
+
+fn default_tail_lines() -> usize {
+    500
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LogsConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_tail_lines")]
+    pub tail_lines: usize,
+    #[serde(default)]
+    pub sources: Vec<LogSourceConfig>,
+}
+
+impl Default for LogsConfig {
+    fn default() -> Self {
+        LogsConfig {
+            enabled: false,
+            tail_lines: 500,
+            sources: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct HangarConfig {
     #[serde(default)]
     pub push: PushConfig,
     #[serde(default)]
     pub sandbox: SandboxDefaults,
+    #[serde(default)]
+    pub logs: LogsConfig,
 }
 
 pub fn load() -> Result<HangarConfig> {
