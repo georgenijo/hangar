@@ -1,4 +1,16 @@
-import type { Session, StoredEvent, CreateSessionRequest, LabelEntry, SessionKind, FsDiffResponse, LogSource, SearchResult } from './types';
+import type {
+	Session,
+	StoredEvent,
+	CreateSessionRequest,
+	LabelEntry,
+	SessionKind,
+	FsDiffResponse,
+	LogSource,
+	SearchResult,
+	WorktreeTreeResponse,
+	WorktreeFileResponse,
+	WorktreeDiffResponse
+} from './types';
 
 export class ApiError extends Error {
 	constructor(
@@ -126,6 +138,29 @@ export async function mergeOverlay(id: string): Promise<Session> {
 	const res = await checkOk(
 		await fetch(`/api/v1/sessions/${id}/merge-overlay`, { method: 'POST' })
 	);
+	return res.json();
+}
+
+export async function getWorktreeTree(id: string): Promise<WorktreeTreeResponse> {
+	const res = await checkOk(await fetch(`/api/v1/sessions/${id}/worktree/tree`));
+	return res.json();
+}
+
+export async function getWorktreeFile(
+	id: string,
+	path: string
+): Promise<WorktreeFileResponse> {
+	const qs = new URLSearchParams({ path }).toString();
+	const res = await checkOk(await fetch(`/api/v1/sessions/${id}/worktree/file?${qs}`));
+	return res.json();
+}
+
+export async function getWorktreeDiff(
+	id: string,
+	path: string
+): Promise<WorktreeDiffResponse> {
+	const qs = new URLSearchParams({ path }).toString();
+	const res = await checkOk(await fetch(`/api/v1/sessions/${id}/worktree/diff?${qs}`));
 	return res.json();
 }
 
