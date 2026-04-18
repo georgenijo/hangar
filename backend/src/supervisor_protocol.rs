@@ -69,10 +69,36 @@ pub struct SupervisorSessionInfo {
     pub alive: bool,
 }
 
-pub fn supervisor_sock_path() -> PathBuf {
+/// Resolve the hangar state directory.
+///
+/// Precedence:
+/// 1. `HANGAR_STATE_DIR` env var (used as-is).
+/// 2. `dirs::state_dir()` (honors `XDG_STATE_HOME`, defaults to
+///    `~/.local/state` on Linux) joined with `hangar`.
+/// 3. Fallback: `/tmp/hangar` (only reached if neither home nor XDG resolve).
+///
+/// All persistent on-disk state — DB, ring buffers, supervisor socket —
+/// lives under this root, so an ephemeral test can redirect everything
+/// to a single temp dir.
+pub fn hangar_state_dir() -> PathBuf {
+    if let Ok(s) = std::env::var("HANGAR_STATE_DIR") {
+        return PathBuf::from(s);
+    }
     dirs::state_dir()
+        .or_else(|| dirs::home_dir().map(|h| h.join(".local/state")))
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("hangar/supervisor.sock")
+        .join("hangar")
+}
+
+/// Supervisor Unix socket path.
+///
+/// `HANGAR_SUPERVISOR_SOCK` takes precedence when set (absolute path);
+/// otherwise derives from [`hangar_state_dir`].
+pub fn supervisor_sock_path() -> PathBuf {
+    if let Ok(s) = std::env::var("HANGAR_SUPERVISOR_SOCK") {
+        return PathBuf::from(s);
+    }
+    hangar_state_dir().join("supervisor.sock")
 }
 
 pub fn write_frame(stream: &mut impl Write, data: &[u8]) -> Result<()> {
