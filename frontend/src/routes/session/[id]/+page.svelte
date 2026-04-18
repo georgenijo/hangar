@@ -3,7 +3,7 @@
 	import type { Session } from '$lib/types';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import { eventsStore } from '$lib/stores/events.svelte';
-	import { kindLabel, kindIcon } from '$lib/api';
+	import { kindLabel, kindIcon, deleteSession, ApiError } from '$lib/api';
 	import { stateColor } from '$lib/utils';
 	import InsightsPanel from '$lib/components/InsightsPanel.svelte';
 	import TerminalView from '$lib/components/TerminalView.svelte';
@@ -12,6 +12,10 @@
 	let { data }: { data: { session: Session } } = $props();
 
 	let session = $derived(sessionsStore.getSessionById(data.session.id) ?? data.session);
+
+	let confirmOpen = $state(false);
+	let killing = $state(false);
+	let killError = $state<string | null>(null);
 
 	$effect(() => {
 		const id = data.session.id;
@@ -27,6 +31,36 @@
 			case 'bot': return '🤖';
 			case 'binary': return '⬜';
 			default: return '•';
+		}
+	}
+
+	function openConfirm() {
+		killError = null;
+		confirmOpen = true;
+	}
+
+	function cancelConfirm() {
+		if (killing) return;
+		confirmOpen = false;
+	}
+
+	async function confirmKill() {
+		if (killing) return;
+		killing = true;
+		killError = null;
+		try {
+			await deleteSession(session.id);
+			// Nudge the sessions store so dashboard does not show a stale tile.
+			sessionsStore.removeSession?.(session.id);
+			await goto('/');
+		} catch (err) {
+			killError =
+				err instanceof ApiError
+					? `${err.status}: ${err.body || err.message}`
+					: err instanceof Error
+						? err.message
+						: 'Unknown error';
+			killing = false;
 		}
 	}
 </script>
@@ -48,7 +82,38 @@
 		{#if session.agent_meta?.model}
 			<span class="model-name mono">{session.agent_meta.model}</span>
 		{/if}
+		<button
+			class="kill-btn"
+			type="button"
+			title="Kill and remove this session"
+			onclick={openConfirm}
+		>
+			✕ Kill
+		</button>
 	</div>
+
+	{#if confirmOpen}
+		<div class="modal-backdrop" onclick={cancelConfirm} role="presentation">
+			<div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="kill-title">
+				<h2 id="kill-title">Kill session <code class="mono">{session.slug}</code>?</h2>
+				<p>
+					This will terminate the underlying process and permanently remove the session,
+					its event history, and its terminal ring buffer. This cannot be undone.
+				</p>
+				{#if killError}
+					<p class="modal-error">Error: {killError}</p>
+				{/if}
+				<div class="modal-actions">
+					<button type="button" class="btn-secondary" onclick={cancelConfirm} disabled={killing}>
+						Cancel
+					</button>
+					<button type="button" class="btn-danger" onclick={confirmKill} disabled={killing}>
+						{killing ? 'Killing…' : 'Kill session'}
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	{#if eventsStore.awaitingPermission}
 		<div class="permission-banner">
@@ -227,5 +292,97 @@
 	.sandbox-error {
 		font-size: 0.8rem;
 		color: #f44336;
+	}
+
+	.kill-btn {
+		margin-left: 8px;
+		background: transparent;
+		color: #f44336;
+		border: 1px solid rgba(244, 67, 54, 0.5);
+		border-radius: var(--radius);
+		padding: 3px 10px;
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
+
+	.kill-btn:hover {
+		background: rgba(244, 67, 54, 0.12);
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.55);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 100;
+	}
+
+	.modal {
+		background: var(--surface, var(--bg));
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 20px 22px;
+		max-width: 440px;
+		width: calc(100% - 32px);
+		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+	}
+
+	.modal h2 {
+		font-size: 1rem;
+		margin: 0 0 10px 0;
+		color: var(--text);
+	}
+
+	.modal p {
+		font-size: 0.85rem;
+		color: var(--text-muted);
+		margin: 0 0 14px 0;
+		line-height: 1.4;
+	}
+
+	.modal-error {
+		color: #f44336;
+	}
+
+	.modal-actions {
+		display: flex;
+		gap: 10px;
+		justify-content: flex-end;
+	}
+
+	.btn-secondary,
+	.btn-danger {
+		border-radius: var(--radius);
+		padding: 6px 14px;
+		font-size: 0.85rem;
+		cursor: pointer;
+		border: 1px solid var(--border);
+	}
+
+	.btn-secondary {
+		background: transparent;
+		color: var(--text);
+	}
+
+	.btn-secondary:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.05);
+	}
+
+	.btn-danger {
+		background: #f44336;
+		color: #fff;
+		border-color: #f44336;
+	}
+
+	.btn-danger:hover:not(:disabled) {
+		background: #e53935;
+	}
+
+	.btn-secondary:disabled,
+	.btn-danger:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 </style>

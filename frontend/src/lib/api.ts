@@ -71,6 +71,12 @@ export async function resizeSession(id: string, cols: number, rows: number): Pro
 	);
 }
 
+export async function deleteSession(id: string): Promise<void> {
+	await checkOk(
+		await fetch(`/api/v1/sessions/${id}`, { method: 'DELETE' })
+	);
+}
+
 export function normalizeLabels(raw: unknown): LabelEntry[] {
 	if (raw === null || raw === undefined) return [];
 	if (Array.isArray(raw)) {
