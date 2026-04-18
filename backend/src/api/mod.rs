@@ -8,6 +8,7 @@ pub mod prompt;
 pub mod resize;
 pub mod search;
 pub mod sessions;
+pub mod worktree;
 
 use axum::{
     extract::State,
@@ -58,6 +59,18 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/sessions/:id/prompt", post(prompt::prompt_session))
         .route("/api/v1/sessions/:id/key", post(key::send_key))
         .route("/api/v1/sessions/:id/fsdiff", get(sessions::get_fs_diff))
+        .route(
+            "/api/v1/sessions/:id/worktree/tree",
+            get(worktree::get_tree),
+        )
+        .route(
+            "/api/v1/sessions/:id/worktree/file",
+            get(worktree::get_file),
+        )
+        .route(
+            "/api/v1/sessions/:id/worktree/diff",
+            get(worktree::get_diff),
+        )
         .route(
             "/api/v1/sessions/:id/merge-overlay",
             post(sessions::merge_overlay_handler),
