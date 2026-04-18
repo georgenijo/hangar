@@ -93,8 +93,3 @@ Each phase has its own `docs/phases/<NN>-*.md` with explicit acceptance criteria
 4. **Document choices as ADRs** — future Claude sessions should be able to understand "why" without asking
 5. **Tmux keeps running** during the whole build — the stopgap dashboard is kept working until hangar's own UI fully replaces it
 
----
-
-## Time horizon
-
-Claude Code is the engineer. No fixed deadlines. Phase-at-a-time; next phase kicks off only after the previous one has shipped criteria and been used for at least a week.
