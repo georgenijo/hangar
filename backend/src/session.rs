@@ -254,10 +254,7 @@ impl Session {
         }
     }
 
-    async fn delete_inner(
-        conn: &mut sqlx::SqliteConnection,
-        id_str: &str,
-    ) -> Result<bool> {
+    async fn delete_inner(conn: &mut sqlx::SqliteConnection, id_str: &str) -> Result<bool> {
         // events_fts is external-content (content='events'). A direct
         // `DELETE FROM events_fts` yields SQLITE_CORRUPT_VTAB, so we emit
         // the FTS5 'delete' command for each row belonging to this session.

@@ -93,8 +93,21 @@
 	</div>
 
 	{#if confirmOpen}
-		<div class="modal-backdrop" onclick={cancelConfirm} role="presentation">
-			<div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="kill-title">
+		<div
+			class="modal-backdrop"
+			onclick={cancelConfirm}
+			onkeydown={(e) => e.key === 'Escape' && cancelConfirm()}
+			role="presentation"
+		>
+			<div
+				class="modal"
+				onclick={(e) => e.stopPropagation()}
+				onkeydown={(e) => e.stopPropagation()}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="kill-title"
+				tabindex={-1}
+			>
 				<h2 id="kill-title">Kill session <code class="mono">{session.slug}</code>?</h2>
 				<p>
 					This will terminate the underlying process and permanently remove the session,
