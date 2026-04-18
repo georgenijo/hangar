@@ -9,6 +9,7 @@
 	import InsightsPanel from '$lib/components/InsightsPanel.svelte';
 	import TerminalView from '$lib/components/TerminalView.svelte';
 	import SandboxDiffView from '$lib/components/SandboxDiffView.svelte';
+	import CodeViewer from '$lib/components/CodeViewer.svelte';
 
 	let { data }: { data: { session: Session } } = $props();
 
@@ -18,6 +19,7 @@
 	let confirmOpen = $state(false);
 	let killing = $state(false);
 	let killError = $state<string | null>(null);
+	let codeOpen = $state(false);
 
 	$effect(() => {
 		const id = data.session.id;
@@ -84,6 +86,15 @@
 		{#if session.agent_meta?.model}
 			<span class="model-name mono">{session.agent_meta.model}</span>
 		{/if}
+		<button
+			class="code-btn"
+			class:active={codeOpen}
+			type="button"
+			title="Toggle code viewer"
+			onclick={() => (codeOpen = !codeOpen)}
+		>
+			{codeOpen ? '▾' : '▸'} Code
+		</button>
 		<button
 			class="kill-btn"
 			type="button"
@@ -153,8 +164,15 @@
 
 	<div class="session-body">
 		{#key session.id}
-			<div class="split" class:insights-collapsed={insightsCollapsed}>
+			<div
+				class="split"
+				class:insights-collapsed={insightsCollapsed}
+				class:split-with-code={codeOpen}
+			>
 				<div class="main-pane"><TerminalView {session} /></div>
+				{#if codeOpen}
+					<div class="code-pane"><CodeViewer sessionId={session.id} /></div>
+				{/if}
 				<aside class="side-pane">
 					<div class="side-header">
 						<button
@@ -283,6 +301,20 @@
 		grid-template-columns: 1fr 36px;
 	}
 
+	.split-with-code {
+		grid-template-columns: 1fr minmax(320px, 40%) 280px;
+	}
+
+	.split-with-code.insights-collapsed {
+		grid-template-columns: 1fr minmax(320px, 40%) 36px;
+	}
+
+	.code-pane {
+		overflow: hidden;
+		min-width: 0;
+		background: var(--bg);
+	}
+
 	.main-pane {
 		overflow: hidden;
 		display: flex;
@@ -362,6 +394,22 @@
 	.sandbox-error {
 		font-size: 0.8rem;
 		color: #f44336;
+	}
+
+	.code-btn {
+		background: transparent;
+		color: var(--text-muted);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 3px 10px;
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
+
+	.code-btn:hover,
+	.code-btn.active {
+		color: var(--text);
+		background: rgba(255, 255, 255, 0.05);
 	}
 
 	.kill-btn {

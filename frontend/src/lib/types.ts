@@ -122,6 +122,39 @@ export interface FsDiffEntry {
 	kind: 'added' | 'modified' | 'deleted';
 }
 
+export type WorktreeFileStatus =
+	| 'clean'
+	| 'modified'
+	| 'added'
+	| 'deleted'
+	| 'untracked'
+	| 'renamed';
+
+export interface WorktreeEntry {
+	path: string;
+	status: WorktreeFileStatus;
+}
+
+export interface WorktreeTreeResponse {
+	root: string;
+	branch: string | null;
+	entries: WorktreeEntry[];
+}
+
+export interface WorktreeFileResponse {
+	path: string;
+	size: number;
+	truncated: boolean;
+	binary: boolean;
+	content: string;
+}
+
+export interface WorktreeDiffResponse {
+	path: string;
+	diff: string;
+	truncated: boolean;
+}
+
 export interface FsDiffResponse {
 	entries: FsDiffEntry[];
 	total: number;
