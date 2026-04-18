@@ -347,18 +347,21 @@ impl AgentDriver for ClaudeCodeDriver {
             }
 
             "UserPromptSubmit" => {
-                let turn_id = self.next_turn();
-                self.last_turn_start_ms = Some(util::now_ms());
-                let content_start = msg
+                let content_start: Option<String> = msg
                     .payload
                     .get("prompt")
                     .and_then(|v| v.as_str())
+                    .filter(|s| !s.trim().is_empty())
                     .map(|s| s.chars().take(100).collect());
-                events.push(AgentEvent::TurnStarted {
-                    turn_id,
-                    role: TurnRole::User,
-                    content_start,
-                });
+                if content_start.is_some() {
+                    let turn_id = self.next_turn();
+                    self.last_turn_start_ms = Some(util::now_ms());
+                    events.push(AgentEvent::TurnStarted {
+                        turn_id,
+                        role: TurnRole::User,
+                        content_start,
+                    });
+                }
             }
 
             "PreToolUse" => {
