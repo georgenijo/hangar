@@ -187,6 +187,37 @@ pub async fn create_session(
         .event_bus
         .send(session_id.to_string(), Event::SessionCreated);
 
+    // Wire up CC hook channel so cc_hook_socket can deliver hook bodies to the driver.
+    {
+        let (oob_tx, mut oob_rx) =
+            tokio::sync::mpsc::channel::<crate::drivers::OobMessage>(64);
+        state
+            .hook_channels
+            .lock()
+            .unwrap()
+            .insert(session_id.to_string(), oob_tx);
+
+        let driver = active.driver.clone();
+        let event_bus = state.event_bus.clone();
+        let hook_channels = state.hook_channels.clone();
+        let sid = session_id.clone();
+        tokio::spawn(async move {
+            while let Some(msg) = oob_rx.recv().await {
+                let events = driver.lock().unwrap().on_oob(msg);
+                for evt in events {
+                    event_bus.send(
+                        sid.to_string(),
+                        Event::AgentEvent {
+                            id: sid.clone(),
+                            event: evt,
+                        },
+                    );
+                }
+            }
+            hook_channels.lock().unwrap().remove(&sid.to_string());
+        });
+    }
+
     state
         .sessions
         .write()

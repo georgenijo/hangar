@@ -88,7 +88,10 @@
 
 	<div class="session-body">
 		{#if session.kind.type === 'claude_code' || session.kind.type === 'codex'}
-			<ChatView {session} />
+			<div class="split">
+				<div class="split-pane chat-pane"><ChatView {session} /></div>
+				<div class="split-pane term-pane"><TerminalView {session} /></div>
+			</div>
 		{:else}
 			<TerminalView {session} />
 		{/if}
@@ -209,6 +212,21 @@
 		flex-direction: column;
 	}
 
+	.split {
+		flex: 1;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1px;
+		background: var(--border);
+		overflow: hidden;
+	}
+
+	.split-pane {
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		background: var(--bg);
+		min-width: 0;
 	.sandbox-section {
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--border);

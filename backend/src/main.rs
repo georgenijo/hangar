@@ -113,6 +113,23 @@ async fn main() -> Result<()> {
     ));
     info!("push task spawned");
 
+    // Event persister: subscribe to the event bus and write every event to DB
+    // so /events and downstream UIs can read history after the fact.
+    {
+        let pool = app_state.db.pool().clone();
+        let mut rx = app_state.event_bus.subscribe();
+        tokio::spawn(async move {
+            while let Ok((session_id, event)) = rx.recv().await {
+                if let Err(e) =
+                    hangard::events::EventStore::insert(&pool, &session_id, &event).await
+                {
+                    tracing::warn!("event persist failed (sid={}): {}", session_id, e);
+                }
+            }
+        });
+        info!("event persister spawned");
+    }
+
     let router = api::router(app_state);
 
     let port: u16 = std::env::var("HANGAR_PORT")

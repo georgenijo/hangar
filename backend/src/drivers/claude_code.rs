@@ -266,16 +266,15 @@ impl AgentDriver for ClaudeCodeDriver {
         let port: u16 = std::env::var("HANGAR_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(4321);
+            .unwrap_or(3000);
 
         let session_id = req.session_id.to_string();
         let hook_url = format!("http://127.0.0.1:{port}/_cc_hook/{session_id}");
 
         let temp_dir = tempfile::TempDir::new()?;
-        let config_path = temp_dir.path().join("settings.json");
+        let settings_path = temp_dir.path().join("hangar-settings.json");
 
         let hooks_config = if let Some(override_path) = &config_override {
-            // Merge with override: read override, inject hooks
             let existing =
                 std::fs::read_to_string(override_path).unwrap_or_else(|_| "{}".to_string());
             let mut v: serde_json::Value =
@@ -286,31 +285,29 @@ impl AgentDriver for ClaudeCodeDriver {
             serde_json::json!({ "hooks": build_hooks_config(&hook_url) })
         };
 
-        std::fs::write(&config_path, serde_json::to_string_pretty(&hooks_config)?)?;
+        std::fs::write(&settings_path, serde_json::to_string_pretty(&hooks_config)?)?;
 
+        let settings_path_str = settings_path.to_string_lossy().into_owned();
         let temp_dir_path = temp_dir.path().to_path_buf();
-        // Keep temp_dir alive by leaking it — the process owns the lifetime
         std::mem::forget(temp_dir);
 
-        let mut command = vec![
+        let command = vec![
             "claude".to_string(),
-            "--config-dir".to_string(),
-            temp_dir_path.to_string_lossy().into_owned(),
+            "--dangerously-skip-permissions".to_string(),
+            "--settings".to_string(),
+            settings_path_str,
         ];
-
-        if let Some(pd) = &project_dir {
-            command.push("--cwd".to_string());
-            command.push(pd.to_string_lossy().into_owned());
-        }
 
         let mut env = req.env.clone();
         env.insert("HANGAR_SESSION_ID".to_string(), session_id);
         env.insert("HANGAR_HMAC_KEY".to_string(), hex::encode(&req.hmac_key));
 
+        let cwd = project_dir.unwrap_or_else(|| req.cwd.clone());
+
         Ok(SpawnCfg {
             command,
             env,
-            cwd: req.cwd.clone(),
+            cwd,
             temp_files: vec![temp_dir_path],
         })
     }
@@ -524,15 +521,27 @@ impl AgentDriver for ClaudeCodeDriver {
     }
 }
 
-fn build_hooks_config(hook_url: &str) -> serde_json::Value {
-    let entry = serde_json::json!([{ "type": "http", "url": hook_url }]);
+fn build_hooks_config(hook_base_url: &str) -> serde_json::Value {
+    let make_entry = |hook_name: &str| {
+        let url = format!("{}/{}", hook_base_url, hook_name);
+        serde_json::json!([{
+            "matcher": "",
+            "hooks": [{
+                "type": "command",
+                "command": format!(
+                    "curl -s -X POST -H 'Content-Type: application/json' --data @- '{}' >/dev/null 2>&1 || true",
+                    url
+                )
+            }]
+        }])
+    };
     serde_json::json!({
-        "PreToolUse": entry,
-        "PostToolUse": entry,
-        "Notification": entry,
-        "Stop": entry,
-        "SessionStart": entry,
-        "UserPromptSubmit": entry,
+        "PreToolUse": make_entry("PreToolUse"),
+        "PostToolUse": make_entry("PostToolUse"),
+        "Notification": make_entry("Notification"),
+        "Stop": make_entry("Stop"),
+        "SessionStart": make_entry("SessionStart"),
+        "UserPromptSubmit": make_entry("UserPromptSubmit"),
     })
 }
 
