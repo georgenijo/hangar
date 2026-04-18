@@ -6,6 +6,7 @@ pub mod metrics;
 pub mod output;
 pub mod prompt;
 pub mod resize;
+pub mod search;
 pub mod sessions;
 
 use axum::{
@@ -56,6 +57,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/sessions/:id/events", get(events::get_events))
         .route("/api/v1/sessions/:id/prompt", post(prompt::prompt_session))
         .route("/api/v1/sessions/:id/key", post(key::send_key))
+        .route("/api/v1/search", get(search::search))
         .route("/api/v1/broadcast", post(broadcast::broadcast))
         .route("/api/v1/metrics", get(metrics::get_metrics))
         .route("/api/v1/logs/sources", get(logs::list_sources))

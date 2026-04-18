@@ -42,6 +42,9 @@
 		>
 			{session.state}
 		</span>
+		{#if session.state === 'exited'}
+			<a class="replay-link" href="/session/{session.id}/replay">▶ Replay</a>
+		{/if}
 		{#if session.agent_meta?.model}
 			<span class="model-name mono">{session.agent_meta.model}</span>
 		{/if}
@@ -126,6 +129,19 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		border: 1px solid;
+	}
+
+	.replay-link {
+		font-size: 0.8rem;
+		color: var(--accent);
+		text-decoration: none;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius);
+		padding: 2px 8px;
+	}
+
+	.replay-link:hover {
+		background: rgba(var(--accent-rgb, 100, 180, 255), 0.1);
 	}
 
 	.model-name {
