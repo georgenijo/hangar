@@ -266,7 +266,7 @@ impl AgentDriver for ClaudeCodeDriver {
         let port: u16 = std::env::var("HANGAR_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(4321);
+            .unwrap_or(3000);
 
         let session_id = req.session_id.to_string();
         let hook_url = format!("http://127.0.0.1:{port}/_cc_hook/{session_id}");
@@ -522,7 +522,10 @@ impl AgentDriver for ClaudeCodeDriver {
 }
 
 fn build_hooks_config(hook_url: &str) -> serde_json::Value {
-    let entry = serde_json::json!([{ "type": "http", "url": hook_url }]);
+    let entry = serde_json::json!([{
+        "matcher": "",
+        "hooks": [{ "type": "http", "url": hook_url }]
+    }]);
     serde_json::json!({
         "PreToolUse": entry,
         "PostToolUse": entry,
