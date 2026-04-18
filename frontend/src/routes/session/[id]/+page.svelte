@@ -3,6 +3,7 @@
 	import type { Session } from '$lib/types';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import { eventsStore } from '$lib/stores/events.svelte';
+	import { sidebarStore } from '$lib/stores/sidebar.svelte';
 	import { kindLabel, kindIcon, deleteSession, ApiError } from '$lib/api';
 	import { stateColor } from '$lib/utils';
 	import InsightsPanel from '$lib/components/InsightsPanel.svelte';
@@ -12,6 +13,7 @@
 	let { data }: { data: { session: Session } } = $props();
 
 	let session = $derived(sessionsStore.getSessionById(data.session.id) ?? data.session);
+	let insightsCollapsed = $derived(sidebarStore.sessionCollapsed);
 
 	let confirmOpen = $state(false);
 	let killing = $state(false);
@@ -151,9 +153,23 @@
 
 	<div class="session-body">
 		{#key session.id}
-			<div class="split">
+			<div class="split" class:insights-collapsed={insightsCollapsed}>
 				<div class="main-pane"><TerminalView {session} /></div>
-				<aside class="side-pane"><InsightsPanel /></aside>
+				<aside class="side-pane">
+					<div class="side-header">
+						<button
+							class="collapse-btn"
+							onclick={() => sidebarStore.toggleSession()}
+							aria-label={insightsCollapsed ? 'Expand insights' : 'Collapse insights'}
+							title={insightsCollapsed ? 'Expand (Ctrl+\\)' : 'Collapse (Ctrl+\\)'}
+						>
+							{insightsCollapsed ? '«' : '»'}
+						</button>
+					</div>
+					{#if !insightsCollapsed}
+						<div class="side-body"><InsightsPanel /></div>
+					{/if}
+				</aside>
 			</div>
 		{/key}
 	</div>
@@ -260,6 +276,11 @@
 		gap: 1px;
 		background: var(--border);
 		overflow: hidden;
+		transition: grid-template-columns 0.25s ease;
+	}
+
+	.split.insights-collapsed {
+		grid-template-columns: 1fr 36px;
 	}
 
 	.main-pane {
@@ -272,8 +293,44 @@
 
 	.side-pane {
 		overflow-y: auto;
+		overflow-x: hidden;
 		background: var(--surface, var(--bg));
 		border-left: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+	}
+
+	.side-header {
+		display: flex;
+		justify-content: flex-start;
+		padding: 6px;
+		border-bottom: 1px solid var(--border);
+		flex-shrink: 0;
+	}
+
+	.split.insights-collapsed .side-header {
+		justify-content: center;
+	}
+
+	.collapse-btn {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 0.9rem;
+		line-height: 1;
+		padding: 2px 8px;
+	}
+
+	.collapse-btn:hover {
+		color: var(--text);
+		border-color: var(--accent);
+	}
+
+	.side-body {
+		flex: 1;
+		overflow-y: auto;
 	}
 
 	.sandbox-section {
