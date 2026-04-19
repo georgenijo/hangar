@@ -11,12 +11,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(pwd)"
 ISSUES=""
 ALL_OPEN=false
+EXCLUDE_LABEL="needs-investigation"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --project-dir) PROJECT_DIR="$2"; shift 2 ;;
-    --issues) ISSUES="$2"; shift 2 ;;
-    --all-open) ALL_OPEN=true; shift ;;
+    --project-dir)    PROJECT_DIR="$2"; shift 2 ;;
+    --issues)         ISSUES="$2"; shift 2 ;;
+    --all-open)       ALL_OPEN=true; shift ;;
+    --exclude-label)  EXCLUDE_LABEL="$2"; shift 2 ;;
+    --no-exclude)     EXCLUDE_LABEL=""; shift ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -25,7 +28,12 @@ REPO_SLUG=$(git -C "$PROJECT_DIR" remote get-url origin | sed 's|.*github.com[:/
 
 # Get issue list
 if [ "$ALL_OPEN" = true ]; then
-  ISSUE_LIST=$(gh issue list --repo "$REPO_SLUG" --state open --json number -q '.[].number' | sort -n)
+  if [ -n "$EXCLUDE_LABEL" ]; then
+    ISSUE_LIST=$(gh issue list --repo "$REPO_SLUG" --search "is:open -label:$EXCLUDE_LABEL" --json number -q '.[].number' | sort -n)
+    echo "[batch] excluding issues labeled: $EXCLUDE_LABEL (override with --exclude-label X or --no-exclude)"
+  else
+    ISSUE_LIST=$(gh issue list --repo "$REPO_SLUG" --state open --json number -q '.[].number' | sort -n)
+  fi
 elif [ -n "$ISSUES" ]; then
   ISSUE_LIST=$(echo "$ISSUES" | tr ',' '\n')
 else
