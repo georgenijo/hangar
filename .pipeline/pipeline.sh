@@ -293,8 +293,17 @@ if ! should_skip_step "$LOG_FILE" "tests-pass"; then
     # Test
     TEST_RESULTS="$LOGS_DIR/test-results-${FIX_ROUND}.json"
 
+    REPO_TEST_CTX_FILE="$PROJECT_DIR/.pipeline/hangar-test-context.md"
+    REPO_TEST_CTX=""
+    if [ -f "$REPO_TEST_CTX_FILE" ]; then
+      REPO_TEST_CTX=$(cat "$REPO_TEST_CTX_FILE")
+    fi
+
     run_agent "tester" "$MODEL_TESTER" \
       "Test the changes on branch $BRANCH_NAME in $PROJECT_DIR.
+
+## Repo-specific test context
+$REPO_TEST_CTX
 
 ## Plan (what was built)
 $PLAN_CONTENT
