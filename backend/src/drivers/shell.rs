@@ -7,6 +7,7 @@ use crate::session::SessionState;
 
 use super::{AgentDriver, OobMessage, PtyHandle, SpawnCfg, SpawnRequest, StateCtx};
 
+// hook test edit
 pub struct ShellDriver {
     scraper: super::status_scraper::ScraperState,
 }
@@ -26,9 +27,11 @@ impl AgentDriver for ShellDriver {
 
     fn spawn_cfg(&self, req: &SpawnRequest) -> Result<SpawnCfg> {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string());
+        let mut env = req.env.clone();
+        super::inherit_baseline_env(&mut env);
         Ok(SpawnCfg {
             command: vec![shell, "-l".to_string()],
-            env: req.env.clone(),
+            env,
             cwd: req.cwd.clone(),
             temp_files: Vec::new(),
         })

@@ -288,6 +288,7 @@ impl AgentDriver for ClaudeCodeDriver {
         ];
 
         let mut env = req.env.clone();
+        super::inherit_baseline_env(&mut env);
         env.insert("HANGAR_SESSION_ID".to_string(), session_id);
         env.insert("HANGAR_HMAC_KEY".to_string(), hex::encode(&req.hmac_key));
 

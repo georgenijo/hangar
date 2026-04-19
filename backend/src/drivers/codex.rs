@@ -118,6 +118,7 @@ impl AgentDriver for CodexDriver {
         }
 
         let mut env = req.env.clone();
+        super::inherit_baseline_env(&mut env);
         env.insert("HANGAR_SESSION_ID".to_string(), session_id);
 
         Ok(SpawnCfg {
