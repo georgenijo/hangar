@@ -142,6 +142,25 @@ pub struct SpawnCfg {
     pub temp_files: Vec<PathBuf>,
 }
 
+/// Inherit baseline environment variables from the hangard process when the
+/// caller did not provide them. Without HOME/USER/PATH/LANG/TERM the spawned
+/// shell hits a degraded codepath: ~/.profile fails the [ -f "$HOME/.bashrc" ]
+/// check so user aliases never load, ls/grep run without --color, PS1 stays
+/// monochrome, and tools on PATH-only locations vanish.
+pub fn inherit_baseline_env(env: &mut HashMap<String, String>) {
+    for var in [
+        "HOME", "USER", "LOGNAME", "SHELL", "PATH", "LANG", "LC_ALL", "LC_CTYPE",
+    ] {
+        if !env.contains_key(var) {
+            if let Ok(v) = std::env::var(var) {
+                env.insert(var.to_string(), v);
+            }
+        }
+    }
+    env.entry("TERM".to_string())
+        .or_insert_with(|| "xterm-256color".to_string());
+}
+
 pub struct PtyHandle {
     writer: Box<dyn std::io::Write + Send>,
 }
