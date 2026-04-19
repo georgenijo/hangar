@@ -21,10 +21,16 @@ pub mod status_scraper {
         .unwrap()
     });
 
+    /// Re-emit even when values are unchanged to keep polling-driven UI fresh.
+    /// Bounds storage at ~30 rows/min/session when idle.
+    const STATUS_HEARTBEAT_MS: u64 = 2000;
+
     #[derive(Default)]
     pub struct ScraperState {
         pub last_dollars: Option<f64>,
         pub last_pct: Option<u32>,
+        pub last_tokens_k: Option<u64>,
+        pub last_emit_ms: Option<u64>,
         pub last_model: Option<String>,
         pub line_buf: String,
         pub status_buf: String,
@@ -53,10 +59,19 @@ pub mod status_scraper {
             let pct: u32 = cap[1].parse().unwrap_or(0);
             let tokens_k: u64 = cap[2].parse().unwrap_or(0);
             let dollars: f64 = cap[3].parse().unwrap_or(0.0);
-            let changed = state.last_dollars != Some(dollars) || state.last_pct != Some(pct);
-            if changed {
+            let now = util::now_ms();
+            let values_changed = state.last_dollars != Some(dollars)
+                || state.last_pct != Some(pct)
+                || state.last_tokens_k != Some(tokens_k);
+            let heartbeat_due = match state.last_emit_ms {
+                Some(t) => now.saturating_sub(t) >= STATUS_HEARTBEAT_MS,
+                None => true,
+            };
+            if values_changed || heartbeat_due {
                 state.last_dollars = Some(dollars);
                 state.last_pct = Some(pct);
+                state.last_tokens_k = Some(tokens_k);
+                state.last_emit_ms = Some(now);
                 events.push(AgentEvent::ContextWindowSizeChanged {
                     pct_used: pct as f32 / 100.0,
                     tokens: tokens_k * 1000,
@@ -110,6 +125,58 @@ pub mod status_scraper {
         }
 
         events
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::util;
+
+        const STATUS_LINE: &str = "CTX 3% 30k $0.11 | foo | claude-opus-4-7 |";
+
+        #[test]
+        fn scrape_status_emits_on_first_match() {
+            let mut state = ScraperState::default();
+            let evs = scrape_status(STATUS_LINE, &mut state);
+            assert_eq!(evs.len(), 3); // ctx + cost + model
+        }
+
+        #[test]
+        fn scrape_status_suppresses_duplicate_within_heartbeat() {
+            let mut state = ScraperState::default();
+            scrape_status(STATUS_LINE, &mut state);
+            // Second call immediately — heartbeat not due, values unchanged.
+            let evs = scrape_status(STATUS_LINE, &mut state);
+            assert_eq!(evs.len(), 0);
+        }
+
+        #[test]
+        fn scrape_status_emits_on_value_change() {
+            let mut state = ScraperState::default();
+            scrape_status(STATUS_LINE, &mut state);
+            let evs = scrape_status("CTX 3% 30k $0.22 | foo | claude-opus-4-7 |", &mut state);
+            // dollars changed → ctx + cost events
+            assert!(evs.len() >= 2);
+        }
+
+        #[test]
+        fn scrape_status_heartbeat_reemits_after_window() {
+            let mut state = ScraperState::default();
+            scrape_status(STATUS_LINE, &mut state);
+            // Backdate last_emit_ms past the heartbeat window.
+            state.last_emit_ms = Some(util::now_ms().saturating_sub(STATUS_HEARTBEAT_MS + 100));
+            let evs = scrape_status(STATUS_LINE, &mut state);
+            assert!(evs.len() >= 2);
+        }
+
+        #[test]
+        fn scrape_status_emits_when_tokens_change_but_pct_unchanged() {
+            let mut state = ScraperState::default();
+            scrape_status("CTX 3% 30k $0.11 | foo | claude-opus-4-7 |", &mut state);
+            // tokens_k changes (32 vs 30), pct stays 3%
+            let evs = scrape_status("CTX 3% 32k $0.11 | foo | claude-opus-4-7 |", &mut state);
+            assert!(evs.len() >= 2);
+        }
     }
 }
 

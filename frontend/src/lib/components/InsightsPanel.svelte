@@ -45,7 +45,9 @@
 	<div class="section">
 		<div class="heading">Cost (est.)</div>
 		<div class="cost-value">${eventsStore.outputCost.estimatedCost.toFixed(4)}</div>
-		<div class="muted">{eventsStore.outputCost.totalTokens.toLocaleString()} output tokens</div>
+		{#if eventsStore.outputCost.outputTokens > 0}
+			<div class="muted">{eventsStore.outputCost.outputTokens.toLocaleString()} output tokens</div>
+		{/if}
 		{#if eventsStore.outputCost.model}
 			<div class="muted mono small">{eventsStore.outputCost.model}</div>
 		{/if}
