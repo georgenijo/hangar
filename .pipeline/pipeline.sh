@@ -299,7 +299,18 @@ if ! should_skip_step "$LOG_FILE" "tests-pass"; then
       REPO_TEST_CTX=$(cat "$REPO_TEST_CTX_FILE")
     fi
 
-    run_agent "tester" "$MODEL_TESTER" \
+    # Detect UI-surface changes vs main → bump tester to opus + post-test gates
+    UI_SURFACE=false
+    if git -C "$PROJECT_DIR" diff --name-only "main...$BRANCH_NAME" 2>/dev/null \
+        | grep -qE '^(frontend/|backend/src/api/|backend/src/drivers/|backend/src/ws/)'; then
+      UI_SURFACE=true
+      RUN_MODEL_TESTER="opus"
+      echo "    [pipeline] UI-surface change detected → tester=opus, smoke + screenshot gates active"
+    else
+      RUN_MODEL_TESTER="$MODEL_TESTER"
+    fi
+
+    run_agent "tester" "$RUN_MODEL_TESTER" \
       "Test the changes on branch $BRANCH_NAME in $PROJECT_DIR.
 
 ## Repo-specific test context
@@ -315,13 +326,48 @@ Write test results to: $TEST_RESULTS" "$FIX_ROUND"
     if [ ! -f "$TEST_RESULTS" ]; then
       echo "    ⚠ No test results file — assuming needs fixing"
     elif jq -e '.status == "PASS"' "$TEST_RESULTS" >/dev/null 2>&1; then
-      TESTS_PASS=true
-      log_test_result "$FIX_ROUND" true
-      echo "    ✓ Tests PASS (round $FIX_ROUND)"
+      # Hard gates — declare PASS only when:
+      #   1. Repo regression smoke succeeds (smoke.sh exists)
+      #   2. UI-surface changes carry >=1 screenshot in test results
+      GATE_PASS=true
+      GATE_NOTES=""
 
-      tmp=$(mktemp)
-      jq '.completed_steps += ["tests-pass"]' "$LOG_FILE" > "$tmp" && mv "$tmp" "$LOG_FILE"
-      continue
+      if [ -x "$PROJECT_DIR/.pipeline/smoke.sh" ]; then
+        SMOKE_DIR="$LOGS_DIR/smoke-${FIX_ROUND}"
+        echo "    [pipeline] running regression smoke → $SMOKE_DIR"
+        if "$PROJECT_DIR/.pipeline/smoke.sh" "$SMOKE_DIR" > "$SMOKE_DIR.log" 2>&1; then
+          echo "    [pipeline] smoke PASS"
+        else
+          echo "    [pipeline] smoke FAIL — see $SMOKE_DIR.log"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}smoke FAIL (see $SMOKE_DIR.log); "
+        fi
+      fi
+
+      if [ "$UI_SURFACE" = true ]; then
+        SHOTS=$(jq '(.screenshots // []) | length' "$TEST_RESULTS" 2>/dev/null || echo 0)
+        if [ "$SHOTS" -lt 1 ]; then
+          echo "    [pipeline] UI-surface change but tester provided $SHOTS screenshots — rejecting PASS"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}UI-surface change requires >=1 screenshot, got $SHOTS; "
+        fi
+      fi
+
+      if [ "$GATE_PASS" = true ]; then
+        TESTS_PASS=true
+        log_test_result "$FIX_ROUND" true
+        echo "    ✓ Tests PASS (round $FIX_ROUND)"
+
+        tmp=$(mktemp)
+        jq '.completed_steps += ["tests-pass"]' "$LOG_FILE" > "$tmp" && mv "$tmp" "$LOG_FILE"
+        continue
+      else
+        tmp=$(mktemp)
+        jq --arg notes "$GATE_NOTES" '.pipeline_gate_failure = $notes | .status = "FAIL"' \
+          "$TEST_RESULTS" > "$tmp" && mv "$tmp" "$TEST_RESULTS"
+        log_test_result "$FIX_ROUND" false
+        echo "    ✗ Pipeline gates FAIL (round $FIX_ROUND/$MAX_FIX_ROUNDS): $GATE_NOTES"
+      fi
     else
       log_test_result "$FIX_ROUND" false
       echo "    ✗ Tests FAIL (round $FIX_ROUND/$MAX_FIX_ROUNDS)"

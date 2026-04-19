@@ -88,3 +88,33 @@ If your change is the fix for one of these, you must include a curl/UI repro sho
 - Verify it reproduces twice
 - Capture: exact request/response, screenshot, log snippet from `/tmp/hangar-restart-g.log`
 - Surface in `notes` of your test results JSON — operator decides whether to file
+
+## Pipeline gates (enforced after you submit results)
+
+Two automated gates run after your test results JSON lands. If either fails, the pipeline rejects PASS regardless of what you wrote and routes the run back to the fixer.
+
+### Gate 1 — Regression smoke (always runs)
+The pipeline executes `./.pipeline/smoke.sh` after your run. It hits `/api/v1/health`, opens the dashboard via agent-browser, spawns a session, asserts HOME/TERM env are populated, verifies the session page renders the slug, and DELETEs cleanly. Smoke failure = test failure.
+
+You don't need to invoke smoke yourself; just make sure your change does not break the dashboard golden path. If your fix intentionally alters this flow, update `smoke.sh` in the same PR.
+
+### Gate 2 — Screenshot evidence (UI-surface changes only)
+If `git diff --name-only main...<branch>` includes any of `frontend/`, `backend/src/api/`, `backend/src/drivers/`, `backend/src/ws/`, your test results JSON MUST include at least one screenshot path in the `screenshots` array. Empty array on UI-surface change = pipeline rejects PASS.
+
+Take screenshots like:
+```bash
+mkdir -p /tmp/test-shots
+agent-browser screenshot --output /tmp/test-shots/dashboard.png
+```
+
+…and include the paths in your output:
+```json
+{
+  "status": "PASS",
+  "screenshots": ["/tmp/test-shots/dashboard.png", "/tmp/test-shots/session-spawn.png"],
+  ...
+}
+```
+
+### Tester model bump
+For UI-surface changes the pipeline silently bumps your model to opus regardless of `models.json`. You may notice slower runs but better instruction-following.
