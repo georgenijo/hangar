@@ -81,6 +81,35 @@ async fn test_shell_session_lifecycle() {
     assert_eq!(session["slug"], "test-shell");
     let id = session["id"].as_str().unwrap().to_string();
 
+    // 2b. POST /sessions — explicit absolute cwd
+    let resp = client
+        .post(format!("{base}/api/v1/sessions"))
+        .json(&serde_json::json!({
+            "slug": "test-shell-cwd",
+            "kind": {"type": "shell"},
+            "cwd": "/tmp"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+    let session_cwd: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(session_cwd["cwd"], "/tmp");
+    let id_cwd = session_cwd["id"].as_str().unwrap().to_string();
+
+    // 2c. POST /sessions — relative cwd → 400
+    let resp = client
+        .post(format!("{base}/api/v1/sessions"))
+        .json(&serde_json::json!({
+            "slug": "test-shell-rel",
+            "kind": {"type": "shell"},
+            "cwd": "./relative"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400);
+
     // 3. GET /sessions — list
     let resp = client
         .get(format!("{base}/api/v1/sessions"))
@@ -188,7 +217,13 @@ async fn test_shell_session_lifecycle() {
     let br: serde_json::Value = resp.json().await.unwrap();
     assert!(br["sent"].as_u64().unwrap() >= 1);
 
-    // 14. DELETE /sessions/:id
+    // 14. DELETE /sessions/:id and test-shell-cwd
+    let resp = client
+        .delete(format!("{base}/api/v1/sessions/{id_cwd}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 204);
     let resp = client
         .delete(format!("{base}/api/v1/sessions/{id}"))
         .send()

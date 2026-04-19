@@ -42,6 +42,8 @@ pub struct CreateSessionRequest {
     #[serde(default = "default_rows")]
     pub rows: u16,
     pub sandbox: Option<SandboxSpec>,
+    #[serde(default)]
+    pub cwd: Option<std::path::PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -64,8 +66,12 @@ pub async fn create_session(
         .create(driver_kind)
         .ok_or(StatusCode::BAD_REQUEST)?;
 
-    let cwd = std::env::current_dir()
-        .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/")));
+    let cwd = match body.cwd.clone() {
+        Some(p) if !p.is_absolute() => return Err(StatusCode::BAD_REQUEST),
+        Some(p) => p,
+        None => std::env::current_dir()
+            .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"))),
+    };
 
     let session_id = SessionId::new();
     let spawn_req = SpawnRequest {

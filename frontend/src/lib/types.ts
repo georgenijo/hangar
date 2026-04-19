@@ -167,6 +167,7 @@ export interface CreateSessionRequest {
 	cols?: number;
 	rows?: number;
 	sandbox?: SandboxSpec;
+	cwd?: string;
 }
 
 export interface SearchResult {

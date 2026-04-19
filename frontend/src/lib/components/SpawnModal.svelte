@@ -83,7 +83,8 @@
 		}
 		submitting = true;
 		try {
-			const session = await createSession({ slug, kind: buildKind(), sandbox: buildSandboxSpec() });
+			const cwd = projectDir.trim() || undefined;
+			const session = await createSession({ slug, kind: buildKind(), sandbox: buildSandboxSpec(), cwd });
 			oncreated(session);
 			await goto(`/session/${session.id}`);
 		} catch (e) {
