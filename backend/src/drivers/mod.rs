@@ -142,7 +142,6 @@ pub struct SpawnCfg {
     pub temp_files: Vec<PathBuf>,
 }
 
-
 /// Inherit baseline environment variables from the hangard process when the
 /// caller did not provide them. Without HOME/USER/PATH/LANG/TERM the spawned
 /// shell hits a degraded codepath: ~/.profile fails the [ -f "$HOME/.bashrc" ]
@@ -158,9 +157,8 @@ pub fn inherit_baseline_env(env: &mut HashMap<String, String>) {
             }
         }
     }
-    env.entry("TERM".to_string()).or_insert_with(|| {
-        std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string())
-    });
+    env.entry("TERM".to_string())
+        .or_insert_with(|| std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()));
 }
 
 pub struct PtyHandle {
