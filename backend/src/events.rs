@@ -79,6 +79,8 @@ pub enum Event {
     OutputAppended {
         offset: u64,
         len: u32,
+        #[serde(default)]
+        text: Option<String>,
     },
     InputReceived {
         data: Vec<u8>,
@@ -121,6 +123,14 @@ pub struct StoredEvent {
     pub event: Event,
 }
 
+fn escape_fts_query(q: &str) -> String {
+    let trimmed = q.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    format!("\"{}\"", trimmed.replace('"', "\"\""))
+}
+
 pub fn extract_searchable_text_pub(event: &Event) -> Option<String> {
     extract_searchable_text(event)
 }
@@ -149,10 +159,23 @@ fn extract_searchable_text(event: &Event) -> Option<String> {
             AgentEvent::SandboxMerged { .. } => None,
             AgentEvent::CostUpdated { .. } => None,
         },
+        Event::OutputAppended { text, .. } => text.clone().filter(|s| !s.is_empty()),
+        Event::InputReceived { data } => {
+            if data.is_empty() {
+                None
+            } else {
+                let s = String::from_utf8_lossy(data)
+                    .trim_end_matches('\0')
+                    .to_string();
+                if s.trim().is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
+            }
+        }
         Event::SessionCreated
         | Event::StateChanged { .. }
-        | Event::OutputAppended { .. }
-        | Event::InputReceived { .. }
         | Event::Resized { .. }
         | Event::MetricsUpdated
         | Event::OverlayDiffReady { .. } => None,
@@ -268,6 +291,12 @@ impl EventStore {
             .collect()
     }
 
+    /// Re-index events that have no `body_text` yet.
+    ///
+    /// Historical `OutputAppended` / `InputReceived` rows stored before the
+    /// `text` field was added carry no indexable text; backfill leaves them
+    /// unindexed and sets `body_text = ''` so they are not re-scanned on the
+    /// next run.
     pub async fn backfill_fts(pool: &SqlitePool) -> Result<u64> {
         let mut total: u64 = 0;
 
@@ -368,7 +397,8 @@ impl EventStore {
 
         sql.push_str(" ORDER BY rank LIMIT ? OFFSET ?");
 
-        let mut q = sqlx::query_as::<_, SearchRow>(&sql).bind(query);
+        let escaped = escape_fts_query(query);
+        let mut q = sqlx::query_as::<_, SearchRow>(&sql).bind(escaped);
 
         if let Some(ids) = session_ids {
             for id in ids {
@@ -386,7 +416,14 @@ impl EventStore {
 
         let rows = q.fetch_all(pool).await.map_err(|e| {
             let msg = e.to_string();
-            if msg.contains("fts5") || msg.contains("malformed") || msg.contains("syntax") {
+            let msg_l = msg.to_lowercase();
+            if msg_l.contains("fts5")
+                || msg_l.contains("malformed")
+                || msg_l.contains("syntax error")
+                || msg_l.contains("no such column")
+                || msg_l.contains("unknown special query")
+                || msg_l.contains("unterminated string")
+            {
                 SearchError::BadQuery(msg)
             } else {
                 SearchError::Db(anyhow::anyhow!(msg))
@@ -454,5 +491,55 @@ impl EventBus {
 
     pub fn send(&self, session_id: String, event: Event) {
         let _ = self.tx.send((session_id, event));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escape_fts_query_plain() {
+        assert_eq!(escape_fts_query("hello"), "\"hello\"");
+    }
+
+    #[test]
+    fn escape_fts_query_hyphen() {
+        assert_eq!(escape_fts_query("foo-bar"), "\"foo-bar\"");
+    }
+
+    #[test]
+    fn escape_fts_query_colon() {
+        assert_eq!(escape_fts_query("a:b"), "\"a:b\"");
+    }
+
+    #[test]
+    fn escape_fts_query_wildcard() {
+        assert_eq!(escape_fts_query("foo*"), "\"foo*\"");
+    }
+
+    #[test]
+    fn escape_fts_query_parens() {
+        assert_eq!(escape_fts_query("(a|b)"), "\"(a|b)\"");
+    }
+
+    #[test]
+    fn escape_fts_query_internal_quote() {
+        assert_eq!(escape_fts_query("he \"said\""), "\"he \"\"said\"\"\"");
+    }
+
+    #[test]
+    fn escape_fts_query_empty() {
+        assert_eq!(escape_fts_query(""), "");
+    }
+
+    #[test]
+    fn escape_fts_query_whitespace_only() {
+        assert_eq!(escape_fts_query("   "), "");
+    }
+
+    #[test]
+    fn escape_fts_query_trims_whitespace() {
+        assert_eq!(escape_fts_query("  hello  "), "\"hello\"");
     }
 }

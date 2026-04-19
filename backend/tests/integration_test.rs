@@ -54,7 +54,11 @@ async fn test_write_2mb_wraps_ring_and_logs_events() {
         let (offset, len) = ring.write(&chunk).unwrap();
         ring.sync().unwrap();
 
-        let event = Event::OutputAppended { offset, len };
+        let event = Event::OutputAppended {
+            offset,
+            len,
+            text: None,
+        };
         EventStore::insert(pool, session_id.as_ref(), &event)
             .await
             .unwrap();
@@ -104,7 +108,7 @@ async fn test_write_2mb_wraps_ring_and_logs_events() {
     for (i, stored) in queried.iter().enumerate() {
         let expected_offset = (i * chunk_size) as u64;
         match &stored.event {
-            Event::OutputAppended { offset, len } => {
+            Event::OutputAppended { offset, len, .. } => {
                 assert_eq!(*offset, expected_offset, "event {} offset mismatch", i);
                 assert_eq!(*len, chunk_size as u32, "event {} len mismatch", i);
             }
@@ -114,13 +118,13 @@ async fn test_write_2mb_wraps_ring_and_logs_events() {
 
     // recent event offsets should resolve; old ones should fail
     let recent_event = &queried[queried.len() - 1];
-    if let Event::OutputAppended { offset, len } = &recent_event.event {
+    if let Event::OutputAppended { offset, len, .. } = &recent_event.event {
         let data = ring2.read_at(*offset, *len).unwrap();
         assert_eq!(data.len(), chunk_size);
     }
 
     let old_event = &queried[0];
-    if let Event::OutputAppended { offset, len } = &old_event.event {
+    if let Event::OutputAppended { offset, len, .. } = &old_event.event {
         assert!(
             ring2.read_at(*offset, *len).is_err(),
             "expected stale error for oldest event"
@@ -489,11 +493,14 @@ async fn test_fts_malformed_query() {
     let db = Db::new_in_memory().await.unwrap();
     let pool = db.pool();
 
+    // Formerly-malformed queries are now escaped into valid FTS5 phrase searches,
+    // so they return Ok([]) rather than an error. Either outcome is acceptable;
+    // what must never happen is a panic or SearchError::Db (500).
     let result = EventStore::search(pool, "unbalanced \"quote", None, None, 10, 0).await;
-    assert!(result.is_err(), "malformed query should return error");
-    // Should be a BadQuery or Db error, not a panic
-    match result.unwrap_err() {
-        SearchError::BadQuery(_) | SearchError::Db(_) => {}
+    match result {
+        Ok(_) => {}
+        Err(SearchError::BadQuery(_)) => {}
+        Err(SearchError::Db(e)) => panic!("query caused Db error (500): {e}"),
     }
 }
 
@@ -625,14 +632,193 @@ async fn test_extract_searchable_text_all_variants() {
     assert!(extract_searchable_text_pub(&Event::MetricsUpdated).is_none());
     assert!(extract_searchable_text_pub(&Event::OutputAppended {
         offset: 0,
-        len: 100
+        len: 100,
+        text: None,
     })
     .is_none());
+    assert!(extract_searchable_text_pub(&Event::OutputAppended {
+        offset: 0,
+        len: 100,
+        text: Some("hello".into()),
+    })
+    .is_some());
     assert!(extract_searchable_text_pub(&Event::InputReceived { data: vec![] }).is_none());
+    assert!(extract_searchable_text_pub(&Event::InputReceived {
+        data: b"abc".to_vec()
+    })
+    .is_some());
     assert!(extract_searchable_text_pub(&Event::Resized { cols: 80, rows: 24 }).is_none());
     assert!(extract_searchable_text_pub(&Event::StateChanged {
         from: hangard::session::SessionState::Idle,
         to: hangard::session::SessionState::Exited,
     })
     .is_none());
+}
+
+#[tokio::test]
+async fn test_fts_hyphen_query_no_500() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid = SessionId::new();
+    make_session(&sid).insert(pool).await.unwrap();
+    let sid_str = sid.to_string();
+
+    EventStore::insert(
+        pool,
+        &sid_str,
+        &Event::AgentEvent {
+            id: sid.clone(),
+            event: AgentEvent::ToolCallStarted {
+                turn_id: 1,
+                call_id: "c1".into(),
+                tool: "Bash".into(),
+                args_preview: "dash-delimited slug".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    let result = EventStore::search(pool, "dash-delimited", None, None, 10, 0).await;
+    assert!(
+        result.is_ok(),
+        "hyphen query should not error: {:?}",
+        result
+    );
+    assert!(
+        !result.unwrap().is_empty(),
+        "expected at least 1 result for dash-delimited"
+    );
+}
+
+#[tokio::test]
+async fn test_fts_colon_query_no_500() {
+    use hangard::events::SearchError;
+
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid = SessionId::new();
+    make_session(&sid).insert(pool).await.unwrap();
+    let sid_str = sid.to_string();
+
+    EventStore::insert(
+        pool,
+        &sid_str,
+        &Event::AgentEvent {
+            id: sid.clone(),
+            event: AgentEvent::Error {
+                message: "foo:bar baz".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    let result = EventStore::search(pool, "foo:bar", None, None, 10, 0).await;
+    match &result {
+        Ok(_) => {}
+        Err(SearchError::BadQuery(_)) => {}
+        Err(SearchError::Db(e)) => panic!("colon query caused Db error (500): {e}"),
+    }
+}
+
+#[tokio::test]
+async fn test_fts_special_chars_no_db_error() {
+    use hangard::events::SearchError;
+
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    for q in &["*abc", "(a|b)", "a\"b", "-"] {
+        let result = EventStore::search(pool, q, None, None, 10, 0).await;
+        match &result {
+            Ok(_) => {}
+            Err(SearchError::BadQuery(_)) => {}
+            Err(SearchError::Db(e)) => {
+                panic!("query {:?} caused Db error (500): {e}", q)
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_shell_output_indexed() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid = SessionId::new();
+    make_session(&sid).insert(pool).await.unwrap();
+    let sid_str = sid.to_string();
+
+    EventStore::insert(
+        pool,
+        &sid_str,
+        &Event::OutputAppended {
+            offset: 0,
+            len: 26,
+            text: Some("hello dash-delimited world".into()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let results = EventStore::search(pool, "dash-delimited", None, None, 10, 0)
+        .await
+        .unwrap();
+    assert_eq!(
+        results.len(),
+        1,
+        "expected 1 result for shell output search"
+    );
+    assert_eq!(results[0].kind, "OutputAppended");
+    assert!(
+        results[0].snippet.contains("dash"),
+        "snippet should contain matched text"
+    );
+}
+
+#[tokio::test]
+async fn test_shell_input_indexed() {
+    let db = Db::new_in_memory().await.unwrap();
+    let pool = db.pool();
+
+    let sid = SessionId::new();
+    make_session(&sid).insert(pool).await.unwrap();
+    let sid_str = sid.to_string();
+
+    EventStore::insert(
+        pool,
+        &sid_str,
+        &Event::InputReceived {
+            data: b"grep foo:bar /tmp\n".to_vec(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let results = EventStore::search(pool, "foo:bar", None, None, 10, 0)
+        .await
+        .unwrap();
+    assert!(
+        !results.is_empty(),
+        "expected at least 1 result for input search"
+    );
+}
+
+#[tokio::test]
+async fn test_shell_output_ansi_stripped() {
+    use hangard::pty::indexable_text_from_chunk;
+
+    let chunk = b"\x1b[31mred\x1b[0m text";
+    let result = indexable_text_from_chunk(chunk);
+    assert!(result.is_some(), "non-empty visible text should be indexed");
+    let text = result.unwrap();
+    assert!(
+        !text.contains('\x1b'),
+        "stored text should not contain ANSI escape bytes"
+    );
+    assert!(text.contains("red"), "text should contain 'red'");
+    assert!(text.contains("text"), "text should contain 'text'");
 }

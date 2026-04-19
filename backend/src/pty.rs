@@ -17,6 +17,7 @@ use crate::raw_fd_master::RawFdMaster;
 use crate::ringbuf::{RingBuf, DEFAULT_CAPACITY};
 use crate::sandbox::{SandboxState, SandboxStatus};
 use crate::session::{Session, SessionId, SessionState};
+use crate::util;
 
 /// Reap a PTY child process to prevent it lingering as a zombie.
 ///
@@ -102,6 +103,29 @@ pub struct ReaderLoopCtx {
     pub current_state: Arc<Mutex<SessionState>>,
 }
 
+const MAX_OUTPUT_INDEX_BYTES: usize = 4096;
+
+pub fn indexable_text_from_chunk(chunk: &[u8]) -> Option<String> {
+    let lossy = String::from_utf8_lossy(chunk);
+    let stripped = util::strip_ansi(&lossy);
+    let truncated: String = stripped
+        .chars()
+        .scan(0usize, |n, c| {
+            *n += c.len_utf8();
+            if *n > MAX_OUTPUT_INDEX_BYTES {
+                None
+            } else {
+                Some(c)
+            }
+        })
+        .collect();
+    if truncated.trim().is_empty() {
+        None
+    } else {
+        Some(truncated)
+    }
+}
+
 fn run_reader_loop(
     mut reader: Box<dyn Read + Send>,
     mut ctx: ReaderLoopCtx,
@@ -116,9 +140,10 @@ fn run_reader_loop(
                         .store(crate::util::now_ms() as i64, Ordering::Relaxed);
                     let chunk = buf[..n].to_vec();
                     if let Ok((offset, len)) = ctx.ring_buf.write(&chunk) {
+                        let text = indexable_text_from_chunk(&chunk);
                         ctx.event_bus.send(
                             ctx.session_id.to_string(),
-                            Event::OutputAppended { offset, len },
+                            Event::OutputAppended { offset, len, text },
                         );
                     }
                     let events = ctx.driver.lock().unwrap().on_bytes(&chunk);
