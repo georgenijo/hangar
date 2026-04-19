@@ -137,26 +137,23 @@ const OUTPUT_RATES: Record<string, number> = {
 const DEFAULT_OUTPUT_RATE = 15 / 1000;
 
 function computeOutputCost(evs: StoredEvent[]): {
-	totalTokens: number;
+	outputTokens: number;
 	estimatedCost: number;
 	model: string | null;
 } {
-	let totalTokens = 0;
+	let outputTokens = 0;
 	let model: string | null = null;
 	let authoritativeCost: number | null = null;
-	let ctxTokens: number | null = null;
 
 	for (const storedEv of evs) {
 		if (storedEv.event.type !== 'agent_event') continue;
 		const ae: AgentEvent = storedEv.event.event;
 		if (ae.type === 'turn_finished') {
-			totalTokens += ae.tokens_used;
+			outputTokens += ae.tokens_used;
 		} else if (ae.type === 'model_changed') {
 			model = ae.model;
 		} else if (ae.type === 'cost_updated') {
 			authoritativeCost = ae.dollars;
-		} else if (ae.type === 'context_window_size_changed') {
-			ctxTokens = ae.tokens;
 		}
 	}
 
@@ -165,10 +162,9 @@ function computeOutputCost(evs: StoredEvent[]): {
 		: undefined;
 	const rate = rateKey ? OUTPUT_RATES[rateKey] : DEFAULT_OUTPUT_RATE;
 	const estimatedCost =
-		authoritativeCost !== null ? authoritativeCost : (totalTokens / 1000) * rate;
-	const displayTokens = ctxTokens !== null ? ctxTokens : totalTokens;
+		authoritativeCost !== null ? authoritativeCost : (outputTokens / 1000) * rate;
 
-	return { totalTokens: displayTokens, estimatedCost, model };
+	return { outputTokens, estimatedCost, model };
 }
 
 function findCurrentModel(evs: StoredEvent[]): string | null {
