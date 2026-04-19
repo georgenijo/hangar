@@ -362,12 +362,17 @@ pub async fn delete_session(
     state.hook_channels.lock().unwrap().remove(&ulid);
 
     // 5. Delete DB rows (events + events_fts + sessions) in one transaction.
-    Session::delete(state.db.pool(), &session.id)
+    // #59: BEGIN IMMEDIATE serializes concurrent deletes; rows_affected == 0
+    // means another request already deleted this session — return 404.
+    let deleted = Session::delete(state.db.pool(), &session.id)
         .await
         .map_err(|e| {
             tracing::error!("Session::delete failed for {ulid}: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+    if !deleted {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     // 6. Remove the ring buffer directory on disk. Best-effort — if it is
     //    missing, the row is already gone so the state is consistent.
