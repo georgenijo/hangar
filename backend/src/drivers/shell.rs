@@ -7,7 +7,6 @@ use crate::session::SessionState;
 
 use super::{AgentDriver, OobMessage, PtyHandle, SpawnCfg, SpawnRequest, StateCtx};
 
-// hook test edit
 pub struct ShellDriver {
     scraper: super::status_scraper::ScraperState,
 }

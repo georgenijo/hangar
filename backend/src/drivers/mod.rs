@@ -158,7 +158,7 @@ pub fn inherit_baseline_env(env: &mut HashMap<String, String>) {
         }
     }
     env.entry("TERM".to_string())
-        .or_insert_with(|| std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()));
+        .or_insert_with(|| "xterm-256color".to_string());
 }
 
 pub struct PtyHandle {
