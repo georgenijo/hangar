@@ -122,7 +122,17 @@ async fn main() -> Result<()> {
                 if let Err(e) =
                     hangard::events::EventStore::insert(&pool, &session_id, &event).await
                 {
-                    tracing::warn!("event persist failed (sid={}): {}", session_id, e);
+                    // #63: FK 787 fires when the session row is deleted before a trailing
+                    // event is flushed. Expected — downgrade to debug and continue.
+                    let is_fk = matches!(
+                        e.downcast_ref::<sqlx::Error>(),
+                        Some(sqlx::Error::Database(dbe)) if dbe.code().as_deref() == Some("787")
+                    );
+                    if is_fk {
+                        tracing::debug!("event for deleted session dropped (sid={})", session_id);
+                    } else {
+                        tracing::warn!("event persist failed (sid={}): {}", session_id, e);
+                    }
                 }
             }
         });
