@@ -9,12 +9,21 @@
 
 	let { children } = $props();
 
+	// hook test edit
 	let spawnOpen = $state(false);
 	let collapsed = $derived(sidebarStore.dashboardCollapsed);
 
 	$effect(() => {
 		sessionsStore.startPolling();
 		return () => sessionsStore.stopPolling();
+	});
+
+	$effect(() => {
+		function onSpawn() {
+			spawnOpen = true;
+		}
+		window.addEventListener('hangar:open-spawn', onSpawn);
+		return () => window.removeEventListener('hangar:open-spawn', onSpawn);
 	});
 
 	$effect(() => {
