@@ -12,6 +12,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			$lib: '/src/lib'
-		}
+		},
+		conditions: ['browser']
 	}
 });
