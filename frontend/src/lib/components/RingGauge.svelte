@@ -25,6 +25,7 @@
 			class:ring-warn={isWarn}
 			stroke-dasharray={circumference}
 			stroke-dashoffset={offset}
+			style="transform: rotate(-90deg); transform-origin: center;"
 		/>
 	</svg>
 	<div class="ring-val">{Math.round(value)}%</div>
