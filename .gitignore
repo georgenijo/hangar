@@ -14,3 +14,11 @@ hangar.db-*
 
 # Cloudflare tunnel credentials (contains tunnel secret)
 *.credentials.json
+
+# Agentfield pipeline artifacts
+.artifacts/
+.worktrees/
+.agentfield_output_placeholder.json
+agentfield_output.json
+temp_agentfield_output.json
+temp_output.json

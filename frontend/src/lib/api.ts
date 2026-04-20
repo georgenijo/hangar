@@ -9,7 +9,11 @@ import type {
 	SearchResult,
 	WorktreeTreeResponse,
 	WorktreeFileResponse,
-	WorktreeDiffResponse
+	WorktreeDiffResponse,
+	HostMetrics,
+	DailyCost,
+	ModelCost,
+	PipelineRun
 } from './types';
 
 export class ApiError extends Error {
@@ -199,4 +203,26 @@ export function kindIcon(k: SessionKind): string {
 		case 'codex':
 			return 'bot';
 	}
+}
+
+// ===== Rollup Endpoints =====
+
+export async function getHostMetrics(): Promise<HostMetrics> {
+	const res = await checkOk(await fetch('/api/v1/metrics/host'));
+	return res.json();
+}
+
+export async function getCostsDaily(): Promise<DailyCost[]> {
+	const res = await checkOk(await fetch('/api/v1/costs/daily'));
+	return res.json();
+}
+
+export async function getCostsByModel(): Promise<ModelCost[]> {
+	const res = await checkOk(await fetch('/api/v1/costs/by-model'));
+	return res.json();
+}
+
+export async function getPipelineRuns(): Promise<PipelineRun[]> {
+	const res = await checkOk(await fetch('/api/v1/pipeline/runs'));
+	return res.json();
 }

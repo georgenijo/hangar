@@ -287,6 +287,39 @@ if ! should_skip_step "$LOG_FILE" "tests-pass"; then
   FIX_ROUND=$(get_fix_iteration "$LOG_FILE")
   PLAN_CONTENT="$(cat "$PLAN_FILE")"
 
+  # --- Ephemeral stack for pipeline isolation ---
+  PORT=$((3000 + ISSUE_NUM))
+  VITE_PORT=$((5173 + ISSUE_NUM))
+  DB_PATH="/tmp/hangar-pipe-${ISSUE_NUM}.db"
+  SUPERVISOR_SOCK="/tmp/hangar-pipe-supervisor-${ISSUE_NUM}.sock"
+
+  # Cleanup function
+  cleanup_ephemeral_stack() {
+    echo "[pipeline] Cleaning up ephemeral stack for issue $ISSUE_NUM"
+    [ -n "${HANGARD_PID:-}" ] && kill "$HANGARD_PID" 2>/dev/null || true
+    [ -n "${VITE_PID:-}" ] && kill "$VITE_PID" 2>/dev/null || true
+    rm -f "$DB_PATH" "$SUPERVISOR_SOCK"
+  }
+  trap cleanup_ephemeral_stack EXIT
+
+  # Start ephemeral hangard
+  echo "[pipeline] Starting hangard on port $PORT with db $DB_PATH"
+  "$PROJECT_DIR/target/release/hangard" --port "$PORT" --db-path "$DB_PATH" --supervisor-sock "$SUPERVISOR_SOCK" &
+  HANGARD_PID=$!
+  sleep 2  # Allow startup
+
+  # Start ephemeral vite
+  echo "[pipeline] Starting vite on port $VITE_PORT"
+  cd "$PROJECT_DIR/frontend"
+  npm run dev -- --port "$VITE_PORT" &
+  VITE_PID=$!
+  cd - >/dev/null
+  sleep 3  # Allow vite startup
+
+  # Export for agent use
+  export HANGAR_API_URL="http://localhost:$PORT"
+  export HANGAR_DASHBOARD_URL="http://localhost:$VITE_PORT"
+
   while [ "$TESTS_PASS" = false ] && [ "$FIX_ROUND" -lt "$MAX_FIX_ROUNDS" ]; do
     FIX_ROUND=$((FIX_ROUND + 1))
 
@@ -350,6 +383,33 @@ Write test results to: $TEST_RESULTS" "$FIX_ROUND"
           echo "    [pipeline] UI-surface change but tester provided $SHOTS screenshots — rejecting PASS"
           GATE_PASS=false
           GATE_NOTES="${GATE_NOTES}UI-surface change requires >=1 screenshot, got $SHOTS; "
+        fi
+      fi
+
+      # Gate 3: Tester artifact validation
+      if [ -f "$TEST_RESULTS" ]; then
+        # Check scenarios.length >= 1
+        SCENARIO_COUNT=$(jq '(.scenarios // []) | length' "$TEST_RESULTS" 2>/dev/null || echo 0)
+        if [ "$SCENARIO_COUNT" -lt 1 ]; then
+          echo "    [pipeline] Gate FAIL: scenarios.length >= 1 required, got $SCENARIO_COUNT"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}scenarios.length >= 1 required (got $SCENARIO_COUNT); "
+        fi
+
+        # Check at least one scenario references issue ID
+        ISSUE_REF=$(jq -e ".scenarios[]? | select(. | test(\"#${ISSUE_NUM}|issue-${ISSUE_NUM}\"))" "$TEST_RESULTS" 2>/dev/null || echo "")
+        if [ -z "$ISSUE_REF" ] && [ "$SCENARIO_COUNT" -gt 0 ]; then
+          echo "    [pipeline] Gate FAIL: at least one scenario must reference issue #$ISSUE_NUM or issue-$ISSUE_NUM"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}scenario must reference issue ID; "
+        fi
+
+        # Check summary non-empty
+        SUMMARY_LEN=$(jq '(.summary // "") | length' "$TEST_RESULTS" 2>/dev/null || echo 0)
+        if [ "$SUMMARY_LEN" -lt 1 ]; then
+          echo "    [pipeline] Gate FAIL: summary must be non-empty"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}summary must be non-empty; "
         fi
       fi
 

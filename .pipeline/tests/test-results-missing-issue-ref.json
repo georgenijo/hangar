@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "scenarios": [
+    "Test scenario without issue reference"
+  ],
+  "summary": "Some test summary",
+  "screenshots": []
+}

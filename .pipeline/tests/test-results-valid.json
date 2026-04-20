@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "scenarios": [
+    "Test scenario for issue-42",
+    "Another scenario mentioning #42"
+  ],
+  "summary": "Tested the feature and it works correctly",
+  "screenshots": []
+}
