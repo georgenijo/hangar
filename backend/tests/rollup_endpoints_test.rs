@@ -457,3 +457,58 @@ async fn test_costs_by_model_model_change_updates() {
     assert_eq!(array[0]["model"], "claude-sonnet-4");
     assert_eq!(array[0]["dollars"], 3.00);
 }
+
+#[tokio::test]
+async fn test_pipeline_runs_endpoint() {
+    let (base, _server, _db) = spawn_test_server().await;
+    let client = reqwest::Client::new();
+
+    let res = client
+        .get(format!("{}/api/v1/pipeline/runs", base))
+        .send()
+        .await
+        .expect("request failed");
+
+    // Verify 200 status
+    assert_eq!(res.status(), 200, "expected 200 OK status");
+
+    // Verify response is JSON array
+    let json: serde_json::Value = res.json().await.expect("invalid json");
+    assert!(json.is_array(), "expected JSON array");
+
+    // Verify array contains at least 2 items
+    let array = json.as_array().unwrap();
+    assert!(
+        array.len() >= 2,
+        "expected at least 2 pipeline runs, got {}",
+        array.len()
+    );
+
+    // Verify first object has all required fields
+    let first = &array[0];
+    assert!(first.get("issue").is_some(), "missing 'issue' field");
+    assert!(first.get("title").is_some(), "missing 'title' field");
+    assert!(first.get("state").is_some(), "missing 'state' field");
+    assert!(first.get("phase").is_some(), "missing 'phase' field");
+    assert!(first.get("cost").is_some(), "missing 'cost' field");
+    assert!(first.get("tokens").is_some(), "missing 'tokens' field");
+    assert!(first.get("agents").is_some(), "missing 'agents' field");
+    assert!(
+        first.get("duration_s").is_some(),
+        "missing 'duration_s' field"
+    );
+
+    // Verify second object has all required fields
+    let second = &array[1];
+    assert!(second.get("issue").is_some(), "missing 'issue' field");
+    assert!(second.get("title").is_some(), "missing 'title' field");
+    assert!(second.get("state").is_some(), "missing 'state' field");
+    assert!(second.get("phase").is_some(), "missing 'phase' field");
+    assert!(second.get("cost").is_some(), "missing 'cost' field");
+    assert!(second.get("tokens").is_some(), "missing 'tokens' field");
+    assert!(second.get("agents").is_some(), "missing 'agents' field");
+    assert!(
+        second.get("duration_s").is_some(),
+        "missing 'duration_s' field"
+    );
+}
