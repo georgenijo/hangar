@@ -287,6 +287,37 @@ if ! should_skip_step "$LOG_FILE" "tests-pass"; then
   FIX_ROUND=$(get_fix_iteration "$LOG_FILE")
   PLAN_CONTENT="$(cat "$PLAN_FILE")"
 
+  # --- Ephemeral stack for pipeline isolation ---
+  PORT=$((3000 + ISSUE_NUM))
+  VITE_PORT=$((5173 + ISSUE_NUM))
+  DB_PATH="/tmp/hangar-pipe-${ISSUE_NUM}.db"
+  SUPERVISOR_SOCK="/tmp/hangar-pipe-supervisor-${ISSUE_NUM}.sock"
+
+  # Cleanup function
+  cleanup_ephemeral_stack() {
+    echo "[pipeline] Cleaning up ephemeral stack for issue $ISSUE_NUM"
+    [ -n "${HANGARD_PID:-}" ] && kill "$HANGARD_PID" 2>/dev/null || true
+    [ -n "${VITE_PID:-}" ] && kill "$VITE_PID" 2>/dev/null || true
+    rm -f "$DB_PATH" "$SUPERVISOR_SOCK"
+  }
+  trap cleanup_ephemeral_stack EXIT
+
+  # Start ephemeral hangard
+  echo "[pipeline] Starting hangard on port $PORT with db $DB_PATH"
+  "$PROJECT_DIR/target/release/hangard" --port "$PORT" --db-path "$DB_PATH" --supervisor-sock "$SUPERVISOR_SOCK" &
+  HANGARD_PID=$!
+  sleep 2  # Allow startup
+
+  # Start ephemeral vite
+  echo "[pipeline] Starting vite on port $VITE_PORT"
+  (cd "$PROJECT_DIR/frontend" && npm run dev -- --port "$VITE_PORT" &)
+  VITE_PID=$!
+  sleep 3  # Allow vite startup
+
+  # Export for agent use
+  export HANGAR_API_URL="http://localhost:$PORT"
+  export HANGAR_DASHBOARD_URL="http://localhost:$VITE_PORT"
+
   while [ "$TESTS_PASS" = false ] && [ "$FIX_ROUND" -lt "$MAX_FIX_ROUNDS" ]; do
     FIX_ROUND=$((FIX_ROUND + 1))
 
