@@ -1,5 +1,7 @@
 use anyhow::Result;
+use clap::Parser;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use tracing::{info, warn};
@@ -12,8 +14,27 @@ use hangard::{
     AppState,
 };
 
+/// Hangar backend daemon - manages development sessions with PTY support
+#[derive(Parser, Debug)]
+#[command(name = "hangard")]
+#[command(about = "Hangar backend daemon", long_about = None)]
+struct Args {
+    /// Port to bind the HTTP server (can also be set via HANGAR_PORT env var)
+    #[arg(long, default_value_t = 3000)]
+    port: u16,
+
+    /// Path to SQLite database file
+    #[arg(long)]
+    db_path: Option<PathBuf>,
+
+    /// Path to supervisor socket
+    #[arg(long)]
+    supervisor_sock: Option<PathBuf>,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = Args::parse();
     let start_time = Instant::now();
     tracing_subscriber::fmt::init();
 
@@ -23,7 +44,8 @@ async fn main() -> Result<()> {
     let sessions_dir = state_dir.join("sessions");
     std::fs::create_dir_all(&sessions_dir)?;
 
-    let db = Db::new(Some(state_dir.join("hangar.db"))).await?;
+    let db_path = args.db_path.unwrap_or_else(|| state_dir.join("hangar.db"));
+    let db = Db::new(Some(db_path)).await?;
 
     let backfilled = EventStore::backfill_fts(db.pool()).await?;
     if backfilled > 0 {
@@ -34,7 +56,9 @@ async fn main() -> Result<()> {
     let sessions_registry: hangard::SessionRegistry = Arc::new(RwLock::new(HashMap::new()));
 
     // Attempt supervisor connection and session recovery
-    let sock_path = hangard::supervisor_protocol::supervisor_sock_path();
+    let sock_path = args
+        .supervisor_sock
+        .unwrap_or_else(|| hangard::supervisor_protocol::supervisor_sock_path());
     let supervisor = match hangard::supervisor_client::SupervisorClient::connect(&sock_path) {
         Ok(client) => {
             info!("connected to supervisor at {:?}", sock_path);
@@ -141,10 +165,11 @@ async fn main() -> Result<()> {
 
     let router = api::router(app_state);
 
+    // Priority: HANGAR_PORT env var > --port CLI arg > default (3000)
     let port: u16 = std::env::var("HANGAR_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
-        .unwrap_or(3000);
+        .unwrap_or(args.port);
 
     let addr = format!("127.0.0.1:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
