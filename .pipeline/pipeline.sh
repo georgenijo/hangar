@@ -310,8 +310,10 @@ if ! should_skip_step "$LOG_FILE" "tests-pass"; then
 
   # Start ephemeral vite
   echo "[pipeline] Starting vite on port $VITE_PORT"
-  (cd "$PROJECT_DIR/frontend" && npm run dev -- --port "$VITE_PORT" &)
+  cd "$PROJECT_DIR/frontend"
+  npm run dev -- --port "$VITE_PORT" &
   VITE_PID=$!
+  cd - >/dev/null
   sleep 3  # Allow vite startup
 
   # Export for agent use
