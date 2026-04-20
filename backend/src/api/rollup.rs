@@ -80,6 +80,29 @@ pub async fn get_costs_by_model() -> StatusCode {
 
 // ===== Handler: GET /api/v1/pipeline/runs =====
 
-pub async fn get_pipeline_runs() -> StatusCode {
-    StatusCode::NOT_IMPLEMENTED
+pub async fn get_pipeline_runs() -> Json<Vec<PipelineRun>> {
+    // Stub implementation - returns mock data
+    // Real pipeline DB integration deferred to future phase
+    Json(vec![
+        PipelineRun {
+            issue: 79,
+            title: "cost scraper lag fix".to_string(),
+            state: PipelineRunState::Live,
+            phase: PipelinePhaseId::Tester,
+            cost: 4.82,
+            tokens: 482000,
+            agents: 5,
+            duration_s: 6120,
+        },
+        PipelineRun {
+            issue: 71,
+            title: "sidebar session switcher".to_string(),
+            state: PipelineRunState::Live,
+            phase: PipelinePhaseId::Architect,
+            cost: 0.88,
+            tokens: 82000,
+            agents: 2,
+            duration_s: 1920,
+        },
+    ])
 }
