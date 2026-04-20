@@ -78,6 +78,15 @@ pub mod status_scraper {
                 });
                 events.push(AgentEvent::CostUpdated { dollars });
             }
+            // Trim rolling buffer on CTX match to prevent stale cost value lag
+            if state.status_buf.len() > 1024 {
+                let mut trim_point = state.status_buf.len() - 1024;
+                // Ensure we cut at a char boundary
+                while trim_point < state.status_buf.len() && !state.status_buf.is_char_boundary(trim_point) {
+                    trim_point += 1;
+                }
+                state.status_buf = state.status_buf[trim_point..].to_string();
+            }
         }
         if let Some(cap) = STATUS_MODEL_RE.captures_iter(&state.status_buf).last() {
             let model = cap[1].to_string();
