@@ -5,10 +5,11 @@
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
-use hangard::{api, db::Db, events::{AgentEvent, Event, EventBus}, session::SessionId, AppState};
+use hangard::{api, db::Db, events::{AgentEvent, Event, EventBus, EventStore}, session::{Session, SessionId, SessionKind, SessionState}, AppState};
 
 // ===== Part 1: Manual tests against live server =====
 
@@ -75,7 +76,29 @@ async fn test_host_metrics_cache() {
 
 // ===== Part 2: Standalone tests with in-memory DB =====
 
-async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>) {
+fn make_session(id: &SessionId) -> Session {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    Session {
+        id: id.clone(),
+        slug: format!("test-{}", id),
+        node_id: "local".to_string(),
+        kind: SessionKind::Shell,
+        state: SessionState::Idle,
+        cwd: "/tmp".to_string(),
+        env: serde_json::json!({}),
+        agent_meta: None,
+        labels: serde_json::json!({}),
+        created_at: now,
+        last_activity_at: now,
+        exit: None,
+        sandbox: None,
+    }
+}
+
+async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>, Db) {
     let db = Db::new_in_memory().await.unwrap();
     let event_bus = Arc::new(EventBus::new());
     let tmp = tempfile::tempdir().unwrap();
@@ -99,9 +122,6 @@ async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>) {
         logs: Arc::new(logs_hub),
     };
 
-    // Seed test data: create sample CostUpdated events
-    seed_test_data(&db).await;
-
     let router = api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -111,36 +131,22 @@ async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>) {
         axum::serve(listener, router).await.unwrap();
     });
 
-    (base_url, handle)
+    (base_url, handle, db)
 }
 
-async fn seed_test_data(db: &Db) {
-    // Create a test session
-    let session_id = "test-session-1";
+#[tokio::test]
+async fn test_costs_daily_endpoint() {
+    let (base, _server, db) = spawn_test_server().await;
+    let client = reqwest::Client::new();
+
+    // Seed test data with CostUpdated events
+    let session_id = SessionId::from_str("test-session-1").unwrap();
+    make_session(&session_id).insert(db.pool()).await.unwrap();
+
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-
-    sqlx::query(
-        r#"
-        INSERT INTO sessions (id, slug, node_id, kind, state, cwd, env, labels, created_at, last_activity_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-        "#
-    )
-    .bind(session_id)
-    .bind("test-session")
-    .bind("local")
-    .bind(r#"{"type":"shell"}"#)
-    .bind(r#""idle""#)
-    .bind("/tmp")
-    .bind("{}")
-    .bind("{}")
-    .bind(now)
-    .bind(now)
-    .execute(db.pool())
-    .await
-    .unwrap();
 
     // Insert CostUpdated events for the last few days
     let test_costs = vec![
@@ -150,35 +156,24 @@ async fn seed_test_data(db: &Db) {
     ];
 
     for (ts, dollars) in test_costs {
-        // Create Event::AgentEvent with CostUpdated
-        let event = Event::AgentEvent {
-            id: session_id.parse::<SessionId>().unwrap(),
-            event: AgentEvent::CostUpdated { dollars },
-        };
-
-        // Serialize using MessagePack (same as production code)
-        let body = rmp_serde::to_vec(&event).unwrap();
-
-        sqlx::query(
-            r#"
-            INSERT INTO events (session_id, ts, kind, body)
-            VALUES (?1, ?2, ?3, ?4)
-            "#
+        EventStore::insert(
+            db.pool(),
+            session_id.as_ref(),
+            &Event::AgentEvent {
+                id: session_id.clone(),
+                event: AgentEvent::CostUpdated { dollars },
+            },
         )
-        .bind(session_id)
-        .bind(ts)
-        .bind("AgentEvent")  // Use kind_str() value
-        .bind(body)
-        .execute(db.pool())
         .await
         .unwrap();
-    }
-}
 
-#[tokio::test]
-async fn test_costs_daily_endpoint() {
-    let (base, _server) = spawn_test_server().await;
-    let client = reqwest::Client::new();
+        // Update ts manually since EventStore uses current timestamp
+        sqlx::query("UPDATE events SET ts = ? WHERE ts = (SELECT MAX(ts) FROM events)")
+            .bind(ts)
+            .execute(db.pool())
+            .await
+            .unwrap();
+    }
 
     let resp = client
         .get(format!("{base}/api/v1/costs/daily"))
@@ -223,4 +218,242 @@ async fn test_costs_daily_endpoint() {
     let first = &arr[0];
     assert!(first["date"].is_string());
     assert!(first["dollars"].is_f64() || first["dollars"].is_i64());
+}
+
+#[tokio::test]
+async fn test_costs_by_model_endpoint() {
+    let (base, _server, db) = spawn_test_server().await;
+    let client = reqwest::Client::new();
+
+    // Seed test database with diverse data:
+    // - Session 1: model "claude-opus-4", costs: $2.50 + $1.00 = $3.50
+    // - Session 2: model "claude-sonnet-4", costs: $0.50 + $0.30 = $0.80
+    // - Session 3: no model (should default to 'unknown'), costs: $1.20
+
+    let session1 = SessionId::from_str("session-1").unwrap();
+    let session2 = SessionId::from_str("session-2").unwrap();
+    let session3 = SessionId::from_str("session-3").unwrap();
+
+    // Create sessions in database
+    make_session(&session1).insert(db.pool()).await.unwrap();
+    make_session(&session2).insert(db.pool()).await.unwrap();
+    make_session(&session3).insert(db.pool()).await.unwrap();
+
+    // Session 1 events
+    EventStore::insert(
+        db.pool(),
+        session1.as_ref(),
+        &Event::AgentEvent {
+            id: session1.clone(),
+            event: AgentEvent::ModelChanged {
+                model: "claude-opus-4".to_string(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        db.pool(),
+        session1.as_ref(),
+        &Event::AgentEvent {
+            id: session1.clone(),
+            event: AgentEvent::CostUpdated { dollars: 2.50 },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        db.pool(),
+        session1.as_ref(),
+        &Event::AgentEvent {
+            id: session1.clone(),
+            event: AgentEvent::CostUpdated { dollars: 1.00 },
+        },
+    )
+    .await
+    .unwrap();
+
+    // Session 2 events
+    EventStore::insert(
+        db.pool(),
+        session2.as_ref(),
+        &Event::AgentEvent {
+            id: session2.clone(),
+            event: AgentEvent::ModelChanged {
+                model: "claude-sonnet-4".to_string(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        db.pool(),
+        session2.as_ref(),
+        &Event::AgentEvent {
+            id: session2.clone(),
+            event: AgentEvent::CostUpdated { dollars: 0.50 },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        db.pool(),
+        session2.as_ref(),
+        &Event::AgentEvent {
+            id: session2.clone(),
+            event: AgentEvent::CostUpdated { dollars: 0.30 },
+        },
+    )
+    .await
+    .unwrap();
+
+    // Session 3 events (no model set)
+    EventStore::insert(
+        db.pool(),
+        session3.as_ref(),
+        &Event::AgentEvent {
+            id: session3.clone(),
+            event: AgentEvent::CostUpdated { dollars: 1.20 },
+        },
+    )
+    .await
+    .unwrap();
+
+    // Make request
+    let resp = client
+        .get(format!("{base}/api/v1/costs/by-model"))
+        .send()
+        .await
+        .unwrap();
+
+    // AC1: Returns 200 status
+    assert_eq!(resp.status(), 200);
+
+    let json: serde_json::Value = resp.json().await.unwrap();
+
+    // AC2: Returns JSON array
+    assert!(json.is_array(), "expected array response");
+
+    let array = json.as_array().unwrap();
+
+    // AC3: Should have 3 entries (opus, sonnet, unknown)
+    assert_eq!(array.len(), 3);
+
+    // AC4: Verify sorted by dollars descending
+    // First should be opus ($3.50)
+    assert_eq!(array[0]["model"], "claude-opus-4");
+    assert_eq!(array[0]["dollars"], 3.50);
+
+    // Second should be unknown ($1.20)
+    assert_eq!(array[1]["model"], "unknown");
+    assert_eq!(array[1]["dollars"], 1.20);
+
+    // Third should be sonnet ($0.80)
+    assert_eq!(array[2]["model"], "claude-sonnet-4");
+    assert_eq!(array[2]["dollars"], 0.80);
+}
+
+#[tokio::test]
+async fn test_costs_by_model_empty_database() {
+    let (base, _server, _db) = spawn_test_server().await;
+    let client = reqwest::Client::new();
+
+    // Make request to empty database
+    let resp = client
+        .get(format!("{base}/api/v1/costs/by-model"))
+        .send()
+        .await
+        .unwrap();
+
+    // Should return 200 with empty array
+    assert_eq!(resp.status(), 200);
+
+    let json: serde_json::Value = resp.json().await.unwrap();
+    assert!(json.is_array());
+    assert_eq!(json.as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn test_costs_by_model_model_change_updates() {
+    let (base, _server, db) = spawn_test_server().await;
+    let client = reqwest::Client::new();
+
+    // Test case: session changes model mid-session
+    // - Session 1: starts with opus, changes to sonnet, costs should be attributed to sonnet (most recent)
+
+    let session1 = SessionId::from_str("session-change").unwrap();
+
+    // Create session in database
+    make_session(&session1).insert(db.pool()).await.unwrap();
+
+    // Initial model: opus
+    EventStore::insert(
+        db.pool(),
+        session1.as_ref(),
+        &Event::AgentEvent {
+            id: session1.clone(),
+            event: AgentEvent::ModelChanged {
+                model: "claude-opus-4".to_string(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        db.pool(),
+        session1.as_ref(),
+        &Event::AgentEvent {
+            id: session1.clone(),
+            event: AgentEvent::CostUpdated { dollars: 1.00 },
+        },
+    )
+    .await
+    .unwrap();
+
+    // Model change to sonnet
+    EventStore::insert(
+        db.pool(),
+        session1.as_ref(),
+        &Event::AgentEvent {
+            id: session1.clone(),
+            event: AgentEvent::ModelChanged {
+                model: "claude-sonnet-4".to_string(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    EventStore::insert(
+        db.pool(),
+        session1.as_ref(),
+        &Event::AgentEvent {
+            id: session1.clone(),
+            event: AgentEvent::CostUpdated { dollars: 2.00 },
+        },
+    )
+    .await
+    .unwrap();
+
+    // Make request
+    let resp = client
+        .get(format!("{base}/api/v1/costs/by-model"))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+
+    let json: serde_json::Value = resp.json().await.unwrap();
+    let array = json.as_array().unwrap();
+
+    // Should have only sonnet with total $3.00 (all costs attributed to last model)
+    assert_eq!(array.len(), 1);
+    assert_eq!(array[0]["model"], "claude-sonnet-4");
+    assert_eq!(array[0]["dollars"], 3.00);
 }
