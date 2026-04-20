@@ -200,3 +200,25 @@ export function kindIcon(k: SessionKind): string {
 			return 'bot';
 	}
 }
+
+// ===== Rollup Endpoints =====
+
+export async function getHostMetrics(): Promise<import('./types').HostMetrics> {
+	const res = await checkOk(await fetch('/api/v1/metrics/host'));
+	return res.json();
+}
+
+export async function getCostsDaily(): Promise<import('./types').DailyCost[]> {
+	const res = await checkOk(await fetch('/api/v1/costs/daily'));
+	return res.json();
+}
+
+export async function getCostsByModel(): Promise<import('./types').ModelCost[]> {
+	const res = await checkOk(await fetch('/api/v1/costs/by-model'));
+	return res.json();
+}
+
+export async function getPipelineRuns(): Promise<import('./types').PipelineRun[]> {
+	const res = await checkOk(await fetch('/api/v1/pipeline/runs'));
+	return res.json();
+}
