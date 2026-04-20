@@ -28,8 +28,21 @@
 		return [...rows].sort((a, b) => {
 			const aVal = a[sortKey as keyof T];
 			const bVal = b[sortKey as keyof T];
-			if (aVal === bVal) return 0;
-			const cmp = (aVal ?? '') < (bVal ?? '') ? -1 : 1;
+
+			// Handle null/undefined
+			if (aVal == null && bVal == null) return 0;
+			if (aVal == null) return 1;
+			if (bVal == null) return -1;
+
+			// Compare values with proper type handling
+			let cmp = 0;
+			if (typeof aVal === 'number' && typeof bVal === 'number') {
+				cmp = aVal - bVal;
+			} else {
+				// String comparison for non-numeric values
+				cmp = String(aVal) < String(bVal) ? -1 : String(aVal) > String(bVal) ? 1 : 0;
+			}
+
 			return sortDir === 'asc' ? cmp : -cmp;
 		});
 	});

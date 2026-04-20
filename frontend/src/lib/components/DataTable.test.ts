@@ -272,4 +272,67 @@ describe('DataTable', () => {
 		const names = Array.from(bodyRows).map((row) => row.querySelectorAll('td')[1].textContent);
 		expect(names).toEqual(['Alice', 'Bob', 'Charlie']);
 	});
+
+	it('sorts numeric columns correctly (not lexicographically)', async () => {
+		interface NumericRow {
+			id: number;
+			count: number;
+		}
+
+		const numericColumns: DataTableColumn<NumericRow>[] = [
+			{ key: 'id', label: 'ID', sortable: false },
+			{ key: 'count', label: 'Count', sortable: true }
+		];
+
+		// These numbers would sort incorrectly as strings: "1" < "100" < "20"
+		const numericRows: NumericRow[] = [
+			{ id: 1, count: 1 },
+			{ id: 2, count: 100 },
+			{ id: 3, count: 20 }
+		];
+
+		const { container } = render(DataTable<NumericRow>, {
+			props: { columns: numericColumns, rows: numericRows }
+		});
+
+		// Sort by count (numeric)
+		const countHeader = container.querySelectorAll('thead th')[1];
+		await fireEvent.click(countHeader);
+
+		const bodyRows = container.querySelectorAll('tbody tr');
+		const counts = Array.from(bodyRows).map((row) => row.querySelectorAll('td')[1].textContent);
+		// Should sort numerically: 1 < 20 < 100
+		expect(counts).toEqual(['1', '20', '100']);
+	});
+
+	it('handles null and undefined values when sorting', async () => {
+		interface NullableRow {
+			id: number;
+			name: string | null;
+		}
+
+		const nullableColumns: DataTableColumn<NullableRow>[] = [
+			{ key: 'id', label: 'ID', sortable: true },
+			{ key: 'name', label: 'Name', sortable: true }
+		];
+
+		const nullableRows: NullableRow[] = [
+			{ id: 2, name: 'Bob' },
+			{ id: 1, name: null },
+			{ id: 3, name: 'Alice' }
+		];
+
+		const { container } = render(DataTable<NullableRow>, {
+			props: { columns: nullableColumns, rows: nullableRows }
+		});
+
+		// Sort by name
+		const nameHeader = container.querySelectorAll('thead th')[1];
+		await fireEvent.click(nameHeader);
+
+		const bodyRows = container.querySelectorAll('tbody tr');
+		const names = Array.from(bodyRows).map((row) => row.querySelectorAll('td')[1].textContent);
+		// Null values should sort to the end
+		expect(names).toEqual(['Alice', 'Bob', '']);
+	});
 });

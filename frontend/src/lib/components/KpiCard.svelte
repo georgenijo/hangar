@@ -25,3 +25,12 @@
 		<Sparkline data={data.sparkline} width={80} height={20} />
 	{/if}
 </div>
+
+<style>
+	.kpi-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 6px;
+	}
+</style>
