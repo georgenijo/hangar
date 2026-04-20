@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { pipelineStore } from './pipeline.svelte';
+import { createPipelineStore } from './pipeline.svelte';
 import * as api from '../api';
 import type { PipelineRun } from '../types';
 
@@ -7,11 +7,15 @@ import type { PipelineRun } from '../types';
 vi.mock('../api');
 
 describe('pipelineStore', () => {
+	let pipelineStore: ReturnType<typeof createPipelineStore>;
 	let mockRuns: PipelineRun[];
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
+
+		// Create fresh store instance for each test
+		pipelineStore = createPipelineStore();
 
 		mockRuns = [
 			{
@@ -65,13 +69,9 @@ describe('pipelineStore', () => {
 				duration_s: 0
 			}
 		];
-
-		// Reset store state
-		pipelineStore.stopPolling();
 	});
 
 	afterEach(() => {
-		pipelineStore.stopPolling();
 		vi.useRealTimers();
 	});
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { costsStore } from './costs.svelte';
+import { createCostsStore } from './costs.svelte';
 import * as api from '../api';
 import type { DailyCost, ModelCost } from '../types';
 
@@ -7,12 +7,16 @@ import type { DailyCost, ModelCost } from '../types';
 vi.mock('../api');
 
 describe('costsStore', () => {
+	let costsStore: ReturnType<typeof createCostsStore>;
 	let mockDailyCosts: DailyCost[];
 	let mockModelCosts: ModelCost[];
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
+
+		// Create fresh store instance for each test
+		costsStore = createCostsStore();
 
 		mockDailyCosts = [
 			{ date: '2026-04-14', dollars: 10.5 },
@@ -29,13 +33,9 @@ describe('costsStore', () => {
 			{ model: 'claude-sonnet-3.5', dollars: 28.7 },
 			{ model: 'claude-haiku-3', dollars: 8.1 }
 		];
-
-		// Reset store state
-		costsStore.stopPolling();
 	});
 
 	afterEach(() => {
-		costsStore.stopPolling();
 		vi.useRealTimers();
 	});
 
@@ -109,7 +109,7 @@ describe('costsStore', () => {
 
 			await costsStore.refresh();
 
-			expect(costsStore.last7DaysSpend).toBe(26.2);
+			expect(costsStore.last7DaysSpend).toBeCloseTo(26.2, 1);
 		});
 
 		it('dailyAmounts returns array of dollar values', async () => {

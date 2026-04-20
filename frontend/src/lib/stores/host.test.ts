@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { hostStore } from './host.svelte';
+import { createHostStore } from './host.svelte';
 import * as api from '../api';
 import type { HostMetrics } from '../types';
 
@@ -7,11 +7,15 @@ import type { HostMetrics } from '../types';
 vi.mock('../api');
 
 describe('hostStore', () => {
+	let hostStore: ReturnType<typeof createHostStore>;
 	let mockMetrics: HostMetrics;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
+
+		// Create fresh store instance for each test
+		hostStore = createHostStore();
 
 		mockMetrics = {
 			hostname: 'test-host',
@@ -21,9 +25,6 @@ describe('hostStore', () => {
 			disk_used_bytes: 107374182400, // 100 GB
 			disk_total_bytes: 536870912000 // 500 GB
 		};
-
-		// Reset store state
-		hostStore.stopPolling();
 	});
 
 	afterEach(() => {
