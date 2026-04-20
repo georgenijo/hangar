@@ -14,6 +14,7 @@ const VALID_VIEWS: ViewId[] = [
 ];
 
 let currentHash: ViewId = $state(getHashView());
+const subscribers = new Set<(v: ViewId) => void>();
 
 function getHashView(): ViewId {
 	if (typeof window === 'undefined') return 'command';
@@ -21,9 +22,14 @@ function getHashView(): ViewId {
 	return VALID_VIEWS.includes(h as ViewId) ? (h as ViewId) : 'command';
 }
 
+function notifySubscribers() {
+	subscribers.forEach((fn) => fn(currentHash));
+}
+
 if (typeof window !== 'undefined') {
 	window.addEventListener('hashchange', () => {
 		currentHash = getHashView();
+		notifySubscribers();
 	});
 }
 
@@ -34,7 +40,10 @@ export const currentView = {
 	subscribe(fn: (v: ViewId) => void) {
 		// Svelte store contract - call immediately and on changes
 		fn(currentHash);
-		return () => {}; // Cleanup
+		subscribers.add(fn);
+		return () => {
+			subscribers.delete(fn);
+		};
 	},
 	navigate(view: ViewId) {
 		window.location.hash = view;

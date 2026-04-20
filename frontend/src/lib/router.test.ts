@@ -106,4 +106,81 @@ describe('router', () => {
 		const { currentView } = await import('./router.svelte');
 		expect(currentView.value).toBe('fleet');
 	});
+
+	it('subscribe calls callback immediately with current value', async () => {
+		window.location.hash = '#pipeline';
+		vi.resetModules();
+		const { currentView } = await import('./router.svelte');
+
+		const callback = vi.fn();
+		currentView.subscribe(callback);
+
+		expect(callback).toHaveBeenCalledTimes(1);
+		expect(callback).toHaveBeenCalledWith('pipeline');
+	});
+
+	it('subscribe notifies on hashchange', async () => {
+		window.location.hash = '#command';
+		vi.resetModules();
+		const { currentView } = await import('./router.svelte');
+
+		const callback = vi.fn();
+		const unsubscribe = currentView.subscribe(callback);
+
+		// Clear the initial call
+		callback.mockClear();
+
+		// Simulate hashchange event
+		window.location.hash = '#costs';
+		window.dispatchEvent(new Event('hashchange'));
+
+		expect(callback).toHaveBeenCalledTimes(1);
+		expect(callback).toHaveBeenCalledWith('costs');
+
+		unsubscribe();
+	});
+
+	it('unsubscribe stops receiving notifications', async () => {
+		window.location.hash = '#command';
+		vi.resetModules();
+		const { currentView } = await import('./router.svelte');
+
+		const callback = vi.fn();
+		const unsubscribe = currentView.subscribe(callback);
+
+		callback.mockClear();
+		unsubscribe();
+
+		// Change hash after unsubscribe
+		window.location.hash = '#sessions';
+		window.dispatchEvent(new Event('hashchange'));
+
+		expect(callback).not.toHaveBeenCalled();
+	});
+
+	it('multiple subscribers all receive notifications', async () => {
+		window.location.hash = '#command';
+		vi.resetModules();
+		const { currentView } = await import('./router.svelte');
+
+		const callback1 = vi.fn();
+		const callback2 = vi.fn();
+		const callback3 = vi.fn();
+
+		currentView.subscribe(callback1);
+		currentView.subscribe(callback2);
+		currentView.subscribe(callback3);
+
+		callback1.mockClear();
+		callback2.mockClear();
+		callback3.mockClear();
+
+		// Change hash
+		window.location.hash = '#fleet';
+		window.dispatchEvent(new Event('hashchange'));
+
+		expect(callback1).toHaveBeenCalledWith('fleet');
+		expect(callback2).toHaveBeenCalledWith('fleet');
+		expect(callback3).toHaveBeenCalledWith('fleet');
+	});
 });
