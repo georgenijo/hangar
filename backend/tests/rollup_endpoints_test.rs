@@ -135,7 +135,30 @@ async fn spawn_test_server() -> (String, tokio::task::JoinHandle<()>, Db) {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_costs_daily_endpoint() {
+    let client = Client::new();
+    let res = client
+        .get("http://localhost:3000/api/v1/costs/daily")
+        .send()
+        .await
+        .expect("request failed");
+
+    assert_eq!(res.status(), 200);
+
+    let json: Value = res.json().await.expect("invalid json");
+    assert!(json.is_array(), "expected array response");
+
+    // Verify array elements have required fields
+    let arr = json.as_array().unwrap();
+    for item in arr {
+        assert!(item.get("date").is_some(), "missing date field");
+        assert!(item.get("dollars").is_some(), "missing dollars field");
+    }
+}
+
+#[tokio::test]
+async fn test_costs_daily_with_seeded_data() {
     let (base, _server, db) = spawn_test_server().await;
     let client = reqwest::Client::new();
 
@@ -221,7 +244,30 @@ async fn test_costs_daily_endpoint() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_costs_by_model_endpoint() {
+    let client = Client::new();
+    let res = client
+        .get("http://localhost:3000/api/v1/costs/by-model")
+        .send()
+        .await
+        .expect("request failed");
+
+    assert_eq!(res.status(), 200);
+
+    let json: Value = res.json().await.expect("invalid json");
+    assert!(json.is_array(), "expected array response");
+
+    // Verify array elements have required fields
+    let arr = json.as_array().unwrap();
+    for item in arr {
+        assert!(item.get("model").is_some(), "missing model field");
+        assert!(item.get("dollars").is_some(), "missing dollars field");
+    }
+}
+
+#[tokio::test]
+async fn test_costs_by_model_with_seeded_data() {
     let (base, _server, db) = spawn_test_server().await;
     let client = reqwest::Client::new();
 
@@ -459,7 +505,43 @@ async fn test_costs_by_model_model_change_updates() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_pipeline_runs_endpoint() {
+    let client = Client::new();
+    let res = client
+        .get("http://localhost:3000/api/v1/pipeline/runs")
+        .send()
+        .await
+        .expect("request failed");
+
+    assert_eq!(res.status(), 200);
+
+    let json: Value = res.json().await.expect("invalid json");
+    assert!(json.is_array(), "expected JSON array");
+
+    // Verify array contains at least 2 items
+    let array = json.as_array().unwrap();
+    assert!(
+        array.len() >= 2,
+        "expected at least 2 pipeline runs, got {}",
+        array.len()
+    );
+
+    // Verify all objects have all required fields
+    for item in array {
+        assert!(item.get("issue").is_some(), "missing 'issue' field");
+        assert!(item.get("title").is_some(), "missing 'title' field");
+        assert!(item.get("state").is_some(), "missing 'state' field");
+        assert!(item.get("phase").is_some(), "missing 'phase' field");
+        assert!(item.get("cost").is_some(), "missing 'cost' field");
+        assert!(item.get("tokens").is_some(), "missing 'tokens' field");
+        assert!(item.get("agents").is_some(), "missing 'agents' field");
+        assert!(item.get("duration_s").is_some(), "missing 'duration_s' field");
+    }
+}
+
+#[tokio::test]
+async fn test_pipeline_runs_with_test_server() {
     let (base, _server, _db) = spawn_test_server().await;
     let client = reqwest::Client::new();
 
