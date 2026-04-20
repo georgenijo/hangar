@@ -1,3 +1,5 @@
+#![cfg(feature = "sandbox")]
+
 use std::os::unix::fs::FileTypeExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};

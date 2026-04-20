@@ -366,6 +366,7 @@ pub fn spawn_pty(
 /// container. Set `allocate_tty: true` in SandboxSpec for interactive shell
 /// sessions. This may cause double-PTY signal issues — monitor and report.
 #[allow(clippy::too_many_arguments)]
+#[cfg(all(unix, feature = "sandbox"))]
 pub async fn spawn_pty_sandboxed(
     session_id: SessionId,
     spawn_cfg: SpawnCfg,
@@ -409,6 +410,22 @@ pub async fn spawn_pty_sandboxed(
         db,
         initial_size,
     )
+}
+
+/// Stub implementation when sandbox feature is disabled
+#[allow(clippy::too_many_arguments)]
+#[cfg(not(feature = "sandbox"))]
+pub async fn spawn_pty_sandboxed(
+    _session_id: SessionId,
+    _spawn_cfg: SpawnCfg,
+    _sandbox_status: &SandboxStatus,
+    _driver: Box<dyn AgentDriver>,
+    _ring_dir: PathBuf,
+    _event_bus: Arc<EventBus>,
+    _db: SqlitePool,
+    _initial_size: (u16, u16),
+) -> Result<ActiveSession> {
+    anyhow::bail!("Sandbox support not compiled (requires --features sandbox)")
 }
 
 pub fn reattach(
