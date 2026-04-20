@@ -207,3 +207,105 @@ export type LogWsMessage =
 	| { type: 'initial_tail_complete' }
 	| { type: 'lagged'; dropped: number }
 	| { type: 'set_sources'; sources: string[] };
+
+// ===== View & Navigation Types =====
+export type ViewId =
+	| 'command'
+	| 'sessions'
+	| 'session-detail'
+	| 'pipeline'
+	| 'conductor'
+	| 'fleet'
+	| 'search'
+	| 'costs'
+	| 'voice'
+	| 'settings';
+
+export interface NavItem {
+	id: ViewId;
+	label: string;
+	icon: string;
+	badge?: number | 'live';
+}
+
+// ===== Rollup Endpoint Response Types =====
+export interface HostMetrics {
+	hostname: string;
+	cpu_pct: number;
+	ram_used_bytes: number;
+	ram_total_bytes: number;
+	disk_used_bytes: number;
+	disk_total_bytes: number;
+}
+
+export interface DailyCost {
+	date: string; // ISO 8601 date (YYYY-MM-DD)
+	dollars: number;
+}
+
+export interface ModelCost {
+	model: string;
+	dollars: number;
+}
+
+// NOTE: state uses string literal union matching Rust serde rename
+export type PipelineRunState = 'pending' | 'live' | 'done' | 'failed';
+export type PipelinePhaseId =
+	| 'planner'
+	| 'architect'
+	| 'reviewer'
+	| 'builder'
+	| 'tester'
+	| 'fixer'
+	| 'pr';
+
+export interface PipelineRun {
+	issue: number;
+	title: string;
+	state: PipelineRunState;
+	phase: PipelinePhaseId;
+	cost: number;
+	tokens: number;
+	agents: number;
+	duration_s: number;
+}
+
+// ===== UI Component Prop Types =====
+export interface KpiCardData {
+	label: string;
+	value: string;
+	trend?: { direction: 'up' | 'down' | 'neutral'; text: string };
+	sparkline?: number[];
+	alert?: boolean;
+}
+
+export interface PipelinePhase {
+	name: string;
+	id: PipelinePhaseId;
+	state: 'done' | 'live' | 'pending';
+	info?: string;
+}
+
+export interface DataTableColumn<T> {
+	key: keyof T | string;
+	label: string;
+	sortable?: boolean;
+	width?: string;
+	render?: (row: T) => string;
+}
+
+export interface AgentNode {
+	id: string;
+	label: string;
+	sublabel?: string;
+	tag?: string;
+	x: number;
+	y: number;
+	state: 'idle' | 'live' | 'done';
+}
+
+export interface AgentEdge {
+	from: string;
+	to: string;
+	state: 'pending' | 'active' | 'done';
+}
