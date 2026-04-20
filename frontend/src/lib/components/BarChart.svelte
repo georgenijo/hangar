@@ -14,15 +14,19 @@
 	let { data, width = 600, height = 200, horizontal = false }: Props = $props();
 
 	// Compute max value for normalization
-	const maxValue = $derived(Math.max(...data.map((d) => d.value), 1));
+	// Use absolute values to handle negative numbers, ensure minimum of 1
+	const maxValue = $derived(
+		data.length === 0 ? 1 : Math.max(...data.map((d) => Math.abs(d.value)), 1)
+	);
 
 	// Generate bars
 	const bars = $derived.by(() => {
 		if (horizontal) {
 			// Horizontal bars
-			const barHeight = height / data.length;
+			const barHeight = data.length === 0 ? 0 : height / data.length;
 			return data.map((d, i) => {
-				const barWidth = (d.value / maxValue) * (width - 100); // Leave space for labels
+				// Use absolute value for width calculation to handle negatives
+				const barWidth = Math.max(0, (Math.abs(d.value) / maxValue) * (width - 100)); // Leave space for labels
 				return {
 					x: 80,
 					y: i * barHeight + barHeight * 0.2,
@@ -37,9 +41,10 @@
 			});
 		} else {
 			// Vertical bars
-			const barWidth = width / data.length;
+			const barWidth = data.length === 0 ? 0 : width / data.length;
 			return data.map((d, i) => {
-				const barHeight = (d.value / maxValue) * (height - 40); // Leave space for labels
+				// Use absolute value for height calculation to handle negatives
+				const barHeight = Math.max(0, (Math.abs(d.value) / maxValue) * (height - 40)); // Leave space for labels
 				return {
 					x: i * barWidth + barWidth * 0.2,
 					y: height - barHeight - 20,
