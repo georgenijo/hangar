@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hangar — Control Plane</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT NAV -->
+  <nav class="sidebar">
+    <div class="brand">
+      <span class="mark">▲</span>
+      <span class="wordmark">Hangar</span>
+    </div>
+    <div class="env-pill">
+      <span class="dot dot-ok"></span>
+      <span>home · tailnet</span>
+    </div>
+
+    <ul class="nav-list">
+      <li><a href="#command" class="nav-link" data-view="command"><span class="icon">◈</span>Command</a></li>
+      <li><a href="#sessions" class="nav-link" data-view="sessions"><span class="icon">▤</span>Sessions<span class="badge">7</span></a></li>
+      <li><a href="#session-detail" class="nav-link" data-view="session-detail"><span class="icon">⎇</span>Workspace</a></li>
+      <li><a href="#pipeline" class="nav-link" data-view="pipeline"><span class="icon">⥥</span>Pipelines<span class="badge badge-live">2</span></a></li>
+      <li><a href="#conductor" class="nav-link" data-view="conductor"><span class="icon">◉</span>Conductor</a></li>
+      <li><a href="#fleet" class="nav-link" data-view="fleet"><span class="icon">▣</span>Fleet</a></li>
+      <li><a href="#search" class="nav-link" data-view="search"><span class="icon">⌕</span>Search</a></li>
+      <li><a href="#costs" class="nav-link" data-view="costs"><span class="icon">§</span>Costs</a></li>
+      <li><a href="#voice" class="nav-link" data-view="voice"><span class="icon">◎</span>Voice</a></li>
+      <li><a href="#settings" class="nav-link" data-view="settings"><span class="icon">⚙</span>Settings</a></li>
+    </ul>
+
+    <div class="nav-footer">
+      <div class="nav-user">
+        <div class="avatar">G</div>
+        <div class="nav-user-meta">
+          <div class="nav-user-name">george</div>
+          <div class="nav-user-sub">opus 4.7 · 1M</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="crumb">
+        <span class="crumb-item">hangar</span>
+        <span class="crumb-sep">/</span>
+        <span class="crumb-item crumb-current" id="crumb-view">command</span>
+      </div>
+      <div class="topbar-search">
+        <span class="search-icon">⌕</span>
+        <input type="text" placeholder="Search sessions, events, code…" />
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost" title="notifications"><span>◉</span><span class="btn-dot"></span></button>
+        <button class="btn btn-ghost" title="voice" onclick="location.hash='voice'"><span>◎</span></button>
+        <button class="btn btn-primary">+ New session</button>
+      </div>
+    </header>
+
+    <!-- VIEW: COMMAND -->
+    <section class="view" id="view-command">
+      <div class="view-header">
+        <div>
+          <h1>Command center</h1>
+          <p class="subtitle">Everything happening across your fleet, right now.</p>
+        </div>
+        <div class="view-actions">
+          <button class="btn btn-ghost">Last 24h</button>
+          <button class="btn btn-ghost">Export</button>
+        </div>
+      </div>
+
+      <!-- KPI row -->
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-label">Active sessions</div>
+          <div class="kpi-value"><span class="num">7</span><span class="trend trend-up">▲ 2</span></div>
+          <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,18 10,15 20,16 30,12 40,13 50,9 60,11 70,6 80,8 90,3 100,5"/></svg>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Tokens / min</div>
+          <div class="kpi-value"><span class="num">18.4k</span><span class="trend trend-up">▲ 12%</span></div>
+          <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,20 10,18 20,15 30,17 40,10 50,12 60,8 70,9 80,5 90,6 100,2"/></svg>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Spend today</div>
+          <div class="kpi-value"><span class="num">$12.84</span><span class="trend trend-neutral">~ 0%</span></div>
+          <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,10 10,12 20,9 30,11 40,8 50,13 60,10 70,14 80,9 90,11 100,8"/></svg>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">PRs opened (24h)</div>
+          <div class="kpi-value"><span class="num">4</span><span class="trend trend-up">▲ 1</span></div>
+          <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,22 10,22 20,18 30,18 40,15 50,15 60,10 70,10 80,4 90,4 100,4"/></svg>
+        </div>
+        <div class="kpi kpi-alert">
+          <div class="kpi-label">Needs review</div>
+          <div class="kpi-value"><span class="num">2</span><span class="trend trend-warn">●</span></div>
+          <div class="kpi-sub">UI-surface PRs — manual verify</div>
+        </div>
+      </div>
+
+      <div class="grid-2col">
+        <!-- Active sessions card -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Active sessions</h3>
+            <a href="#sessions" class="link-muted">See all →</a>
+          </div>
+          <div class="session-list">
+            <div class="session-row">
+              <div class="session-status"><span class="dot dot-live pulse"></span></div>
+              <div class="session-meta">
+                <div class="session-title">ingest-refactor — builder</div>
+                <div class="session-sub">opus 4.7 · optiplex · 14m ago</div>
+              </div>
+              <div class="session-stats">
+                <span class="stat-pill">CTX 32%</span>
+                <span class="stat-pill">72k</span>
+                <span class="stat-pill">$1.84</span>
+              </div>
+            </div>
+            <div class="session-row">
+              <div class="session-status"><span class="dot dot-live pulse"></span></div>
+              <div class="session-meta">
+                <div class="session-title">sidebar-switcher — architect</div>
+                <div class="session-sub">sonnet 4.6 · macmini · 3m ago</div>
+              </div>
+              <div class="session-stats">
+                <span class="stat-pill">CTX 18%</span>
+                <span class="stat-pill">41k</span>
+                <span class="stat-pill">$0.62</span>
+              </div>
+            </div>
+            <div class="session-row">
+              <div class="session-status"><span class="dot dot-idle"></span></div>
+              <div class="session-meta">
+                <div class="session-title">logs-wire-up — shell</div>
+                <div class="session-sub">shell · optiplex · idle 7m</div>
+              </div>
+              <div class="session-stats">
+                <span class="stat-pill">—</span>
+                <span class="stat-pill">—</span>
+                <span class="stat-pill">—</span>
+              </div>
+            </div>
+            <div class="session-row">
+              <div class="session-status"><span class="dot dot-live pulse"></span></div>
+              <div class="session-meta">
+                <div class="session-title">cost-scraper-fix — tester</div>
+                <div class="session-sub">opus 4.7 · macmini · 42s ago</div>
+              </div>
+              <div class="session-stats">
+                <span class="stat-pill">CTX 49%</span>
+                <span class="stat-pill">104k</span>
+                <span class="stat-pill">$2.18</span>
+              </div>
+            </div>
+            <div class="session-row">
+              <div class="session-status"><span class="dot dot-warn"></span></div>
+              <div class="session-meta">
+                <div class="session-title">ui-session-switcher — builder <span class="tag-warn">needs input</span></div>
+                <div class="session-sub">opus 4.7 · macmini · waiting 2m</div>
+              </div>
+              <div class="session-stats">
+                <span class="stat-pill">CTX 71%</span>
+                <span class="stat-pill">151k</span>
+                <span class="stat-pill">$3.40</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fleet card -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Fleet</h3>
+            <a href="#fleet" class="link-muted">Detail →</a>
+          </div>
+          <div class="fleet-row">
+            <div class="fleet-mini">
+              <div class="fleet-head">
+                <span class="fleet-name">macmini</span>
+                <span class="fleet-role">primary</span>
+                <span class="dot dot-ok"></span>
+              </div>
+              <div class="gauge-row">
+                <div class="gauge"><div class="gauge-label">CPU</div><div class="gauge-bar"><div class="gauge-fill" style="width:28%"></div></div><div class="gauge-val">28%</div></div>
+                <div class="gauge"><div class="gauge-label">RAM</div><div class="gauge-bar"><div class="gauge-fill" style="width:41%"></div></div><div class="gauge-val">9.8/24G</div></div>
+                <div class="gauge"><div class="gauge-label">Disk</div><div class="gauge-bar"><div class="gauge-fill" style="width:22%"></div></div><div class="gauge-val">112/512G</div></div>
+              </div>
+            </div>
+            <div class="fleet-mini">
+              <div class="fleet-head">
+                <span class="fleet-name">optiplex</span>
+                <span class="fleet-role">helper</span>
+                <span class="dot dot-warn"></span>
+              </div>
+              <div class="gauge-row">
+                <div class="gauge"><div class="gauge-label">CPU</div><div class="gauge-bar"><div class="gauge-fill warn" style="width:78%"></div></div><div class="gauge-val">78%</div></div>
+                <div class="gauge"><div class="gauge-label">RAM</div><div class="gauge-bar"><div class="gauge-fill warn" style="width:91%"></div></div><div class="gauge-val">7.3/8G</div></div>
+                <div class="gauge"><div class="gauge-label">Disk</div><div class="gauge-bar"><div class="gauge-fill" style="width:67%"></div></div><div class="gauge-val">311/465G</div></div>
+              </div>
+            </div>
+            <div class="fleet-mini">
+              <div class="fleet-head">
+                <span class="fleet-name">mbp-m4</span>
+                <span class="fleet-role">dev</span>
+                <span class="dot dot-ok"></span>
+              </div>
+              <div class="gauge-row">
+                <div class="gauge"><div class="gauge-label">CPU</div><div class="gauge-bar"><div class="gauge-fill" style="width:14%"></div></div><div class="gauge-val">14%</div></div>
+                <div class="gauge"><div class="gauge-label">RAM</div><div class="gauge-bar"><div class="gauge-fill" style="width:38%"></div></div><div class="gauge-val">6.1/16G</div></div>
+                <div class="gauge"><div class="gauge-label">Disk</div><div class="gauge-bar"><div class="gauge-fill" style="width:54%"></div></div><div class="gauge-val">270/500G</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Event timeline -->
+        <div class="card card-wide">
+          <div class="card-head">
+            <h3>Live event stream</h3>
+            <div class="chip-row">
+              <span class="chip chip-active">all</span>
+              <span class="chip">tool_call</span>
+              <span class="chip">token</span>
+              <span class="chip">error</span>
+              <span class="chip">pr</span>
+            </div>
+          </div>
+          <div class="timeline">
+            <div class="timeline-row">
+              <div class="timeline-time">00:42:11</div>
+              <div class="timeline-agent">cost-scraper-fix</div>
+              <div class="timeline-kind kind-tool">tool</div>
+              <div class="timeline-body"><code>Edit</code> backend/src/drivers/mod.rs +14 -3</div>
+            </div>
+            <div class="timeline-row">
+              <div class="timeline-time">00:41:58</div>
+              <div class="timeline-agent">sidebar-switcher</div>
+              <div class="timeline-kind kind-token">token</div>
+              <div class="timeline-body">think · 1,204 tok · <span class="mono-sub">$0.018</span></div>
+            </div>
+            <div class="timeline-row">
+              <div class="timeline-time">00:41:40</div>
+              <div class="timeline-agent">ingest-refactor</div>
+              <div class="timeline-kind kind-pr">pr</div>
+              <div class="timeline-body">opened <a href="#">#82</a> refactor: move event persist into tokio-task</div>
+            </div>
+            <div class="timeline-row">
+              <div class="timeline-time">00:41:22</div>
+              <div class="timeline-agent">ui-session-switcher</div>
+              <div class="timeline-kind kind-warn">warn</div>
+              <div class="timeline-body">awaiting operator — approve network fetch to tailscale.com</div>
+            </div>
+            <div class="timeline-row">
+              <div class="timeline-time">00:40:55</div>
+              <div class="timeline-agent">cost-scraper-fix</div>
+              <div class="timeline-kind kind-tool">tool</div>
+              <div class="timeline-body"><code>Bash</code> cargo test scraper::tests -- --nocapture</div>
+            </div>
+            <div class="timeline-row">
+              <div class="timeline-time">00:40:12</div>
+              <div class="timeline-agent">logs-wire-up</div>
+              <div class="timeline-kind kind-event">event</div>
+              <div class="timeline-body">idle — last input 7m ago</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pipeline mini -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Pipelines in flight</h3>
+            <a href="#pipeline" class="link-muted">All runs →</a>
+          </div>
+          <div class="pipeline-list">
+            <div class="pipe-row">
+              <div class="pipe-issue">#79</div>
+              <div class="pipe-title">cost scraper lag fix</div>
+              <div class="pipe-phases">
+                <span class="phase phase-done">plan</span>
+                <span class="phase phase-done">arch</span>
+                <span class="phase phase-done">build</span>
+                <span class="phase phase-live">test</span>
+                <span class="phase">fix</span>
+                <span class="phase">pr</span>
+              </div>
+            </div>
+            <div class="pipe-row">
+              <div class="pipe-issue">#71</div>
+              <div class="pipe-title">sidebar session switcher</div>
+              <div class="pipe-phases">
+                <span class="phase phase-done">plan</span>
+                <span class="phase phase-live">arch</span>
+                <span class="phase">build</span>
+                <span class="phase">test</span>
+                <span class="phase">fix</span>
+                <span class="phase">pr</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cost chart -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Spend · 7d</h3>
+            <span class="hint-text">$68.42 total</span>
+          </div>
+          <svg class="bar-chart" viewBox="0 0 300 120" preserveAspectRatio="none">
+            <g>
+              <rect x="10" y="60" width="24" height="50" class="bar"/>
+              <rect x="50" y="40" width="24" height="70" class="bar"/>
+              <rect x="90" y="30" width="24" height="80" class="bar"/>
+              <rect x="130" y="55" width="24" height="55" class="bar"/>
+              <rect x="170" y="22" width="24" height="88" class="bar"/>
+              <rect x="210" y="10" width="24" height="100" class="bar"/>
+              <rect x="250" y="45" width="24" height="65" class="bar bar-accent"/>
+            </g>
+            <g class="bar-labels">
+              <text x="22" y="118">Mon</text>
+              <text x="62" y="118">Tue</text>
+              <text x="102" y="118">Wed</text>
+              <text x="142" y="118">Thu</text>
+              <text x="182" y="118">Fri</text>
+              <text x="222" y="118">Sat</text>
+              <text x="262" y="118">Sun</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: SESSIONS -->
+    <section class="view" id="view-sessions" hidden>
+      <div class="view-header">
+        <div>
+          <h1>Sessions</h1>
+          <p class="subtitle">Every PTY hangar has ever spawned.</p>
+        </div>
+        <div class="view-actions">
+          <div class="filter-group">
+            <span class="chip chip-active">active</span>
+            <span class="chip">idle</span>
+            <span class="chip">exited</span>
+            <span class="chip">all</span>
+          </div>
+          <button class="btn btn-primary">+ New session</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Title</th>
+              <th>Agent</th>
+              <th>Host</th>
+              <th class="num">CTX</th>
+              <th class="num">Tokens</th>
+              <th class="num">Cost</th>
+              <th>Last event</th>
+              <th>Started</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="dot dot-live pulse"></span></td>
+              <td class="cell-title"><a href="#session-detail">ingest-refactor</a></td>
+              <td><span class="agent-badge agent-opus">opus 4.7</span></td>
+              <td><span class="host-badge">optiplex</span></td>
+              <td class="num">32%</td>
+              <td class="num">72,104</td>
+              <td class="num">$1.84</td>
+              <td>14m ago</td>
+              <td>3h ago</td>
+              <td class="cell-actions"><button class="icon-btn">⋯</button></td>
+            </tr>
+            <tr>
+              <td><span class="dot dot-live pulse"></span></td>
+              <td class="cell-title"><a href="#session-detail">sidebar-switcher</a></td>
+              <td><span class="agent-badge agent-sonnet">sonnet 4.6</span></td>
+              <td><span class="host-badge">macmini</span></td>
+              <td class="num">18%</td>
+              <td class="num">41,002</td>
+              <td class="num">$0.62</td>
+              <td>3m ago</td>
+              <td>24m ago</td>
+              <td class="cell-actions"><button class="icon-btn">⋯</button></td>
+            </tr>
+            <tr>
+              <td><span class="dot dot-live pulse"></span></td>
+              <td class="cell-title"><a href="#session-detail">cost-scraper-fix</a></td>
+              <td><span class="agent-badge agent-opus">opus 4.7</span></td>
+              <td><span class="host-badge">macmini</span></td>
+              <td class="num">49%</td>
+              <td class="num">104,210</td>
+              <td class="num">$2.18</td>
+              <td>42s ago</td>
+              <td>1h ago</td>
+              <td class="cell-actions"><button class="icon-btn">⋯</button></td>
+            </tr>
+            <tr>
+              <td><span class="dot dot-warn"></span></td>
+              <td class="cell-title"><a href="#session-detail">ui-session-switcher <span class="tag-warn">input</span></a></td>
+              <td><span class="agent-badge agent-opus">opus 4.7</span></td>
+              <td><span class="host-badge">macmini</span></td>
+              <td class="num">71%</td>
+              <td class="num">151,820</td>
+              <td class="num">$3.40</td>
+              <td>waiting 2m</td>
+              <td>2h ago</td>
+              <td class="cell-actions"><button class="icon-btn">⋯</button></td>
+            </tr>
+            <tr>
+              <td><span class="dot dot-idle"></span></td>
+              <td class="cell-title"><a href="#session-detail">logs-wire-up</a></td>
+              <td><span class="agent-badge agent-shell">shell</span></td>
+              <td><span class="host-badge">optiplex</span></td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td>idle 7m</td>
+              <td>12m ago</td>
+              <td class="cell-actions"><button class="icon-btn">⋯</button></td>
+            </tr>
+            <tr class="row-exited">
+              <td><span class="dot dot-off"></span></td>
+              <td class="cell-title">pipe-78 tester</td>
+              <td><span class="agent-badge agent-opus">opus 4.7</span></td>
+              <td><span class="host-badge">optiplex</span></td>
+              <td class="num">52%</td>
+              <td class="num">118,402</td>
+              <td class="num">$2.72</td>
+              <td>exited OK</td>
+              <td>6h ago</td>
+              <td class="cell-actions"><button class="icon-btn">⋯</button></td>
+            </tr>
+            <tr class="row-exited">
+              <td><span class="dot dot-off"></span></td>
+              <td class="cell-title">agent-deck-recon</td>
+              <td><span class="agent-badge agent-sonnet">sonnet 4.6</span></td>
+              <td><span class="host-badge">optiplex</span></td>
+              <td class="num">—</td>
+              <td class="num">36,204</td>
+              <td class="num">$0.41</td>
+              <td>exited OK</td>
+              <td>1d ago</td>
+              <td class="cell-actions"><button class="icon-btn">⋯</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VIEW: SESSION DETAIL -->
+    <section class="view view-workspace" id="view-session-detail" hidden>
+      <div class="workspace-topbar">
+        <div class="ws-title-block">
+          <span class="dot dot-live pulse"></span>
+          <div>
+            <div class="ws-title">cost-scraper-fix</div>
+            <div class="ws-sub"><span>opus 4.7</span> · <span>macmini</span> · <span>issue #79</span> · <span>1h 14m</span></div>
+          </div>
+        </div>
+        <div class="ws-actions">
+          <button class="btn btn-ghost">⟲ restart</button>
+          <button class="btn btn-ghost">↗ broadcast</button>
+          <button class="btn btn-ghost">⎘ fork</button>
+          <button class="btn btn-danger-ghost">× terminate</button>
+        </div>
+      </div>
+
+      <div class="workspace-tabs">
+        <a class="ws-tab ws-tab-active">Terminal</a>
+        <a class="ws-tab">Events <span class="tab-count">482</span></a>
+        <a class="ws-tab">Files <span class="tab-count">7</span></a>
+        <a class="ws-tab">Diff</a>
+        <a class="ws-tab">Shots <span class="tab-count">3</span></a>
+        <a class="ws-tab">Shell</a>
+      </div>
+
+      <div class="workspace-body">
+        <!-- Terminal pane -->
+        <div class="pane pane-terminal">
+          <div class="terminal-chrome">
+            <span class="tc-dot tc-red"></span>
+            <span class="tc-dot tc-yel"></span>
+            <span class="tc-dot tc-grn"></span>
+            <span class="tc-path">macmini · ~/Documents/hangar/backend</span>
+          </div>
+          <pre class="terminal">
+<span class="t-dim">●</span> <span class="t-op">Read</span> <span class="t-path">backend/src/drivers/mod.rs</span>
+<span class="t-dim">  ⎿</span>  2248 lines
+
+<span class="t-acc">I'll fix the rolling buffer staleness by trimming on every CTX match,</span>
+<span class="t-acc">so the regex always sees the latest statusline.</span>
+
+<span class="t-dim">●</span> <span class="t-op">Edit</span> <span class="t-path">backend/src/drivers/mod.rs</span>
+<span class="t-dim">  ⎿</span>  <span class="t-add">+14</span> <span class="t-rem">-3</span>
+
+<span class="t-dim">●</span> <span class="t-op">Bash</span> <span class="t-mono">cargo test scraper::tests -- --nocapture</span>
+<span class="t-dim">  ⎿</span>  <span class="t-ok">test scraper::tests::rolling_buffer_trims_on_ctx_match ... ok</span>
+     <span class="t-ok">test scraper::tests::no_stale_cost_after_update ... ok</span>
+     <span class="t-ok">test scraper::tests::session_id_artifact_filtered ... ok</span>
+     <span class="t-dim">test result: ok. 18 passed; 0 failed</span>
+
+<span class="t-acc">All tests pass. Opening PR.</span>
+
+<span class="t-dim">●</span> <span class="t-op">Bash</span> <span class="t-mono">gh pr create --title "fix(scraper): trim rolling buffer…"</span>
+<span class="t-dim">  ⎿</span>  <span class="t-link">https://github.com/georgenijo/hangar/pull/84</span>
+
+<span class="t-cursor">▍</span></pre>
+        </div>
+
+        <!-- Right sidebar: live meters + code diff + events preview -->
+        <aside class="ws-sidebar">
+          <div class="meter-grid">
+            <div class="meter">
+              <div class="meter-top">
+                <span class="meter-label">Context</span>
+                <span class="meter-val">49%</span>
+              </div>
+              <div class="meter-bar"><div class="meter-fill" style="width:49%"></div></div>
+              <div class="meter-sub">104,210 / 200k · 95k left</div>
+            </div>
+            <div class="meter">
+              <div class="meter-top">
+                <span class="meter-label">Cost</span>
+                <span class="meter-val">$2.18</span>
+              </div>
+              <div class="meter-bar"><div class="meter-fill meter-fill-accent" style="width:22%"></div></div>
+              <div class="meter-sub">budget $10 · 22%</div>
+            </div>
+            <div class="meter">
+              <div class="meter-top">
+                <span class="meter-label">Output tok/min</span>
+                <span class="meter-val">2,104</span>
+              </div>
+              <svg class="spark spark-tall" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,24 10,22 20,20 30,22 40,14 50,18 60,11 70,14 80,8 90,10 100,6"/></svg>
+            </div>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-head">Tool mix</div>
+            <div class="tool-bar">
+              <div class="tool-seg tool-read" style="width:41%">Read 41%</div>
+              <div class="tool-seg tool-edit" style="width:28%">Edit 28%</div>
+              <div class="tool-seg tool-bash" style="width:19%">Bash 19%</div>
+              <div class="tool-seg tool-grep" style="width:12%">Grep</div>
+            </div>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-head">Files touched</div>
+            <ul class="file-list">
+              <li><span class="file-stat file-stat-mod">M</span><span class="file-path">backend/src/drivers/mod.rs</span><span class="file-counts"><span class="add">+14</span> <span class="rem">-3</span></span></li>
+              <li><span class="file-stat file-stat-mod">M</span><span class="file-path">backend/src/drivers/tests.rs</span><span class="file-counts"><span class="add">+42</span> <span class="rem">-0</span></span></li>
+              <li><span class="file-stat file-stat-add">A</span><span class="file-path">backend/tests/scraper_fixtures/ctx_wraparound.log</span><span class="file-counts"><span class="add">+88</span> <span class="rem">-0</span></span></li>
+            </ul>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-head">Last events</div>
+            <ul class="mini-events">
+              <li><span class="me-time">0:42</span><span class="me-kind me-tool">tool</span><span class="me-body">Edit mod.rs</span></li>
+              <li><span class="me-time">0:41</span><span class="me-kind me-token">tok</span><span class="me-body">1,204 think</span></li>
+              <li><span class="me-time">0:40</span><span class="me-kind me-tool">tool</span><span class="me-body">Bash cargo test</span></li>
+              <li><span class="me-time">0:39</span><span class="me-kind me-ok">ok</span><span class="me-body">tests pass</span></li>
+              <li><span class="me-time">0:39</span><span class="me-kind me-tool">tool</span><span class="me-body">gh pr create</span></li>
+            </ul>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-head">Actions</div>
+            <div class="action-grid">
+              <button class="btn btn-ghost btn-sm">Fork</button>
+              <button class="btn btn-ghost btn-sm">Broadcast</button>
+              <button class="btn btn-ghost btn-sm">Save prompt</button>
+              <button class="btn btn-ghost btn-sm">Export chat</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- VIEW: PIPELINE -->
+    <section class="view" id="view-pipeline" hidden>
+      <div class="view-header">
+        <div>
+          <h1>Pipelines</h1>
+          <p class="subtitle">Multi-agent build runs. 6 phases per issue.</p>
+        </div>
+        <div class="view-actions">
+          <button class="btn btn-ghost">History</button>
+          <button class="btn btn-primary">+ Dispatch</button>
+        </div>
+      </div>
+
+      <div class="pipeline-wide">
+        <!-- Run 1 -->
+        <div class="pipe-card">
+          <div class="pipe-card-head">
+            <div>
+              <div class="pipe-card-title">#79 · cost scraper lag fix</div>
+              <div class="pipe-card-sub">macmini · <span class="dot dot-live pulse"></span> in flight · 1h 42m</div>
+            </div>
+            <div class="pipe-card-meta">
+              <span class="stat-pill">5 agents</span>
+              <span class="stat-pill">$4.82</span>
+              <span class="stat-pill">482k tok</span>
+            </div>
+          </div>
+          <div class="phase-track">
+            <div class="phase-node done"><span class="phase-dot"></span><span class="phase-name">Planner</span><span class="phase-info">opus · 12m · $0.24</span></div>
+            <div class="phase-line done"></div>
+            <div class="phase-node done"><span class="phase-dot"></span><span class="phase-name">Architect</span><span class="phase-info">opus · 18m · $0.48</span></div>
+            <div class="phase-line done"></div>
+            <div class="phase-node done"><span class="phase-dot"></span><span class="phase-name">Reviewer</span><span class="phase-info">sonnet · 6m · $0.12</span></div>
+            <div class="phase-line done"></div>
+            <div class="phase-node done"><span class="phase-dot"></span><span class="phase-name">Builder</span><span class="phase-info">opus · 38m · $1.84</span></div>
+            <div class="phase-line live"></div>
+            <div class="phase-node live"><span class="phase-dot"></span><span class="phase-name">Tester</span><span class="phase-info">opus · running · $2.14</span></div>
+            <div class="phase-line"></div>
+            <div class="phase-node"><span class="phase-dot"></span><span class="phase-name">Fixer</span><span class="phase-info">pending</span></div>
+            <div class="phase-line"></div>
+            <div class="phase-node"><span class="phase-dot"></span><span class="phase-name">PR</span><span class="phase-info">pending</span></div>
+          </div>
+          <div class="gate-row">
+            <div class="gate gate-pass">smoke PASS</div>
+            <div class="gate gate-pass">screenshots 3/3</div>
+            <div class="gate gate-warn">scenarios 1/3</div>
+            <div class="gate">tester verdict pending</div>
+          </div>
+        </div>
+
+        <!-- Run 2 -->
+        <div class="pipe-card">
+          <div class="pipe-card-head">
+            <div>
+              <div class="pipe-card-title">#71 · sidebar session switcher</div>
+              <div class="pipe-card-sub">macmini · <span class="dot dot-live pulse"></span> in flight · 32m</div>
+            </div>
+            <div class="pipe-card-meta">
+              <span class="stat-pill">2 agents</span>
+              <span class="stat-pill">$0.88</span>
+              <span class="stat-pill">82k tok</span>
+            </div>
+          </div>
+          <div class="phase-track">
+            <div class="phase-node done"><span class="phase-dot"></span><span class="phase-name">Planner</span><span class="phase-info">opus · 8m · $0.16</span></div>
+            <div class="phase-line live"></div>
+            <div class="phase-node live"><span class="phase-dot"></span><span class="phase-name">Architect</span><span class="phase-info">opus · running · $0.72</span></div>
+            <div class="phase-line"></div>
+            <div class="phase-node"><span class="phase-dot"></span><span class="phase-name">Reviewer</span><span class="phase-info">pending</span></div>
+            <div class="phase-line"></div>
+            <div class="phase-node"><span class="phase-dot"></span><span class="phase-name">Builder</span><span class="phase-info">pending</span></div>
+            <div class="phase-line"></div>
+            <div class="phase-node"><span class="phase-dot"></span><span class="phase-name">Tester</span><span class="phase-info">pending</span></div>
+            <div class="phase-line"></div>
+            <div class="phase-node"><span class="phase-dot"></span><span class="phase-name">Fixer</span><span class="phase-info">pending</span></div>
+            <div class="phase-line"></div>
+            <div class="phase-node"><span class="phase-dot"></span><span class="phase-name">PR</span><span class="phase-info">pending</span></div>
+          </div>
+        </div>
+
+        <!-- Recent history -->
+        <div class="pipe-history">
+          <div class="card-head">
+            <h3>Recent runs</h3>
+            <a href="#" class="link-muted">All history →</a>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th></th><th>Issue</th><th>Title</th><th>Host</th><th class="num">Agents</th><th class="num">Cost</th><th class="num">Duration</th><th>Result</th><th>PR</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="dot dot-ok"></span></td><td>#70</td><td>DELETE race + FK 787</td><td>optiplex</td><td class="num">6</td><td class="num">$5.12</td><td class="num">2h 14m</td><td><span class="tag tag-ok">merged</span></td><td><a href="#">#78</a></td></tr>
+              <tr><td><span class="dot dot-ok"></span></td><td>#62</td><td>cwd on create_session</td><td>optiplex</td><td class="num">5</td><td class="num">$3.84</td><td class="num">1h 48m</td><td><span class="tag tag-ok">merged</span></td><td><a href="#">#77</a></td></tr>
+              <tr><td><span class="dot dot-ok"></span></td><td>#58</td><td>FTS5 escape</td><td>optiplex</td><td class="num">5</td><td class="num">$4.22</td><td class="num">1h 56m</td><td><span class="tag tag-ok">merged</span></td><td><a href="#">#75</a></td></tr>
+              <tr><td><span class="dot dot-ok"></span></td><td>#60</td><td>cost/ctx sidebar</td><td>optiplex</td><td class="num">6</td><td class="num">$6.04</td><td class="num">2h 38m</td><td><span class="tag tag-ok">merged</span></td><td><a href="#">#73</a></td></tr>
+              <tr><td><span class="dot dot-fail"></span></td><td>#68</td><td>tester UI context</td><td>optiplex</td><td class="num">4</td><td class="num">$2.16</td><td class="num">48m</td><td><span class="tag tag-fail">gate fail</span></td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: CONDUCTOR -->
+    <section class="view" id="view-conductor" hidden>
+      <div class="view-header">
+        <div>
+          <h1>Conductor</h1>
+          <p class="subtitle">Phase 9 · inter-agent orchestration. Escalate, delegate, branch.</p>
+        </div>
+        <div class="view-actions">
+          <button class="btn btn-ghost">Library</button>
+          <button class="btn btn-primary">+ New flow</button>
+        </div>
+      </div>
+
+      <div class="conductor-grid">
+        <!-- Graph mock -->
+        <div class="card card-wide">
+          <div class="card-head">
+            <h3>Active flow · hangar-round-2</h3>
+            <span class="chip chip-active">running 48m</span>
+          </div>
+          <div class="graph">
+            <svg viewBox="0 0 900 360" class="graph-svg">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+              </defs>
+
+              <g class="node node-done" transform="translate(40,140)">
+                <rect x="0" y="0" width="170" height="80" rx="12"/>
+                <text x="85" y="30" text-anchor="middle" class="node-title">Conductor</text>
+                <text x="85" y="52" text-anchor="middle" class="node-sub">opus 4.7</text>
+                <text x="85" y="68" text-anchor="middle" class="node-tag">root</text>
+              </g>
+
+              <path d="M210 180 C 260 180, 270 80, 320 80" class="edge edge-done" marker-end="url(#arrow)"/>
+              <path d="M210 180 C 260 180, 270 180, 320 180" class="edge edge-done" marker-end="url(#arrow)"/>
+              <path d="M210 180 C 260 180, 270 280, 320 280" class="edge edge-live" marker-end="url(#arrow)"/>
+
+              <g class="node node-done" transform="translate(320,40)">
+                <rect x="0" y="0" width="180" height="80" rx="12"/>
+                <text x="90" y="30" text-anchor="middle" class="node-title">Planner</text>
+                <text x="90" y="52" text-anchor="middle" class="node-sub">sonnet · done</text>
+                <text x="90" y="68" text-anchor="middle" class="node-tag">3 issues picked</text>
+              </g>
+
+              <g class="node node-live" transform="translate(320,140)">
+                <rect x="0" y="0" width="180" height="80" rx="12"/>
+                <text x="90" y="30" text-anchor="middle" class="node-title">Architect</text>
+                <text x="90" y="52" text-anchor="middle" class="node-sub">opus · running</text>
+                <text x="90" y="68" text-anchor="middle" class="node-tag">#71 sidebar</text>
+              </g>
+
+              <g class="node node-live" transform="translate(320,240)">
+                <rect x="0" y="0" width="180" height="80" rx="12"/>
+                <text x="90" y="30" text-anchor="middle" class="node-title">Builder</text>
+                <text x="90" y="52" text-anchor="middle" class="node-sub">opus · running</text>
+                <text x="90" y="68" text-anchor="middle" class="node-tag">#79 scraper</text>
+              </g>
+
+              <path d="M500 180 C 560 180, 580 100, 640 100" class="edge edge-live" marker-end="url(#arrow)"/>
+              <path d="M500 280 C 560 280, 580 260, 640 260" class="edge" marker-end="url(#arrow)"/>
+
+              <g class="node" transform="translate(640,60)">
+                <rect x="0" y="0" width="180" height="80" rx="12"/>
+                <text x="90" y="30" text-anchor="middle" class="node-title">Tester</text>
+                <text x="90" y="52" text-anchor="middle" class="node-sub">pending</text>
+                <text x="90" y="68" text-anchor="middle" class="node-tag">smoke + screenshot</text>
+              </g>
+
+              <g class="node" transform="translate(640,220)">
+                <rect x="0" y="0" width="180" height="80" rx="12"/>
+                <text x="90" y="30" text-anchor="middle" class="node-title">Fixer</text>
+                <text x="90" y="52" text-anchor="middle" class="node-sub">pending</text>
+                <text x="90" y="68" text-anchor="middle" class="node-tag">if test fails</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Escalations -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Escalations</h3>
+            <span class="chip chip-warn">1 waiting</span>
+          </div>
+          <ul class="escalation-list">
+            <li class="esc-item esc-wait">
+              <div class="esc-top">
+                <span class="esc-from">ui-session-switcher</span>
+                <span class="esc-time">2m</span>
+              </div>
+              <div class="esc-msg">Approve network fetch to <span class="mono">tailscale.com</span>? (outbound allowlist)</div>
+              <div class="esc-actions">
+                <button class="btn btn-sm btn-primary">Approve</button>
+                <button class="btn btn-sm btn-ghost">Deny</button>
+                <button class="btn btn-sm btn-ghost">Ask why</button>
+              </div>
+            </li>
+            <li class="esc-item">
+              <div class="esc-top">
+                <span class="esc-from">cost-scraper-fix</span>
+                <span class="esc-time">42m</span>
+              </div>
+              <div class="esc-msg">Wrote failing test first. Should regex strip `Session{id:` artifact before or after rolling buffer trim?</div>
+              <div class="esc-tag tag-ok">auto-resolved</div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Message bus -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Inter-agent messages</h3>
+            <span class="chip">live</span>
+          </div>
+          <ul class="bus-list">
+            <li><span class="bus-time">0:42</span><span class="bus-from">architect</span><span class="bus-arrow">→</span><span class="bus-to">builder</span><span class="bus-body">spec finalized, see comment on #71</span></li>
+            <li><span class="bus-time">0:38</span><span class="bus-from">conductor</span><span class="bus-arrow">→</span><span class="bus-to">architect</span><span class="bus-body">proceed with composable Sidebar refactor</span></li>
+            <li><span class="bus-time">0:34</span><span class="bus-from">reviewer</span><span class="bus-arrow">→</span><span class="bus-to">architect</span><span class="bus-body">approve of approach — one flag: a11y focus ring</span></li>
+            <li><span class="bus-time">0:29</span><span class="bus-from">planner</span><span class="bus-arrow">→</span><span class="bus-to">conductor</span><span class="bus-body">picked #71 #79; #76 deferred (isolation)</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: FLEET -->
+    <section class="view" id="view-fleet" hidden>
+      <div class="view-header">
+        <div>
+          <h1>Fleet</h1>
+          <p class="subtitle">Three-machine hangar. Dispatch aware.</p>
+        </div>
+        <div class="view-actions">
+          <button class="btn btn-ghost">Auto-place</button>
+          <button class="btn btn-primary">+ Add host</button>
+        </div>
+      </div>
+
+      <div class="fleet-grid">
+        <div class="host-card host-primary">
+          <div class="host-head">
+            <div class="host-name-row">
+              <span class="host-name">macmini</span>
+              <span class="host-badge-chip">primary · always-on</span>
+            </div>
+            <span class="dot dot-ok"></span>
+          </div>
+          <div class="host-hardware">M4 base · 10C · 24GB · 512GB int + 2TB ext</div>
+          <div class="host-metrics">
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg" stroke-dasharray="163" stroke-dashoffset="117"/>
+              </svg>
+              <div class="ring-val">28%</div>
+              <div class="ring-label">CPU</div>
+            </div>
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg" stroke-dasharray="163" stroke-dashoffset="96"/>
+              </svg>
+              <div class="ring-val">41%</div>
+              <div class="ring-label">RAM</div>
+            </div>
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg" stroke-dasharray="163" stroke-dashoffset="127"/>
+              </svg>
+              <div class="ring-val">22%</div>
+              <div class="ring-label">DISK</div>
+            </div>
+          </div>
+          <div class="host-services">
+            <span class="svc svc-up">hangard:3000</span>
+            <span class="svc svc-up">vite:5173</span>
+            <span class="svc svc-up">supervisor</span>
+            <span class="svc svc-up">tailscale</span>
+          </div>
+          <div class="host-sessions">2 sessions · 1 pipeline · 0 in queue</div>
+        </div>
+
+        <div class="host-card">
+          <div class="host-head">
+            <div class="host-name-row">
+              <span class="host-name">optiplex</span>
+              <span class="host-badge-chip host-chip-warn">helper · 24/7</span>
+            </div>
+            <span class="dot dot-warn"></span>
+          </div>
+          <div class="host-hardware">i5-7500T · 4C/4T · 8GB · 500GB HDD</div>
+          <div class="host-metrics">
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg ring-warn" stroke-dasharray="163" stroke-dashoffset="36"/>
+              </svg>
+              <div class="ring-val">78%</div>
+              <div class="ring-label">CPU</div>
+            </div>
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg ring-warn" stroke-dasharray="163" stroke-dashoffset="14"/>
+              </svg>
+              <div class="ring-val">91%</div>
+              <div class="ring-label">RAM</div>
+            </div>
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg" stroke-dasharray="163" stroke-dashoffset="54"/>
+              </svg>
+              <div class="ring-val">67%</div>
+              <div class="ring-label">DISK</div>
+            </div>
+          </div>
+          <div class="host-services">
+            <span class="svc svc-up">whoop-poller</span>
+            <span class="svc svc-up">discord-bot</span>
+            <span class="svc svc-up">tailscale</span>
+            <span class="svc svc-down">hangard (off)</span>
+          </div>
+          <div class="host-sessions">2 sessions · 0 pipelines</div>
+        </div>
+
+        <div class="host-card">
+          <div class="host-head">
+            <div class="host-name-row">
+              <span class="host-name">mbp-m4</span>
+              <span class="host-badge-chip host-chip-dev">dev · mobile</span>
+            </div>
+            <span class="dot dot-ok"></span>
+          </div>
+          <div class="host-hardware">M4 · 10C · 16GB · 500GB</div>
+          <div class="host-metrics">
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg" stroke-dasharray="163" stroke-dashoffset="140"/>
+              </svg>
+              <div class="ring-val">14%</div>
+              <div class="ring-label">CPU</div>
+            </div>
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg" stroke-dasharray="163" stroke-dashoffset="101"/>
+              </svg>
+              <div class="ring-val">38%</div>
+              <div class="ring-label">RAM</div>
+            </div>
+            <div class="ring-metric">
+              <svg viewBox="0 0 60 60" class="ring">
+                <circle cx="30" cy="30" r="26" class="ring-bg"/>
+                <circle cx="30" cy="30" r="26" class="ring-fg" stroke-dasharray="163" stroke-dashoffset="75"/>
+              </svg>
+              <div class="ring-val">54%</div>
+              <div class="ring-label">DISK</div>
+            </div>
+          </div>
+          <div class="host-services">
+            <span class="svc svc-up">conductor</span>
+            <span class="svc svc-up">tailscale</span>
+            <span class="svc svc-idle">hangard (dev)</span>
+          </div>
+          <div class="host-sessions">1 conductor · 0 pipelines</div>
+        </div>
+      </div>
+
+      <div class="card card-wide">
+        <div class="card-head">
+          <h3>Dispatch policy</h3>
+          <span class="chip chip-active">cost-first</span>
+        </div>
+        <div class="policy-desc">
+          Pipeline runs route to lowest-utilization always-on host. Conductor stays on <span class="mono">mbp-m4</span>. Backend-only work auto-targets <span class="mono">macmini</span>. Optiplex takes overflow unless RAM &gt; 85%.
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: SEARCH -->
+    <section class="view" id="view-search" hidden>
+      <div class="view-header">
+        <div>
+          <h1>Search</h1>
+          <p class="subtitle">Full-text across every session, event, file, and PR.</p>
+        </div>
+      </div>
+      <div class="search-bar">
+        <input type="text" placeholder="FK 787 constraint" value="FK 787 constraint" />
+        <div class="search-filters">
+          <span class="chip chip-active">all</span>
+          <span class="chip">sessions</span>
+          <span class="chip">events</span>
+          <span class="chip">code</span>
+          <span class="chip">PRs</span>
+        </div>
+      </div>
+      <div class="search-results">
+        <div class="result">
+          <div class="result-head">
+            <span class="result-kind">session</span>
+            <span class="result-title">pipe-70 tester</span>
+            <span class="result-time">yesterday</span>
+          </div>
+          <div class="result-snippet">
+            … <mark>FK 787 constraint failed</mark> after fast-DELETE. Wrapped delete in transaction, drained event flush, returned 404 when …
+          </div>
+        </div>
+        <div class="result">
+          <div class="result-head">
+            <span class="result-kind">code</span>
+            <span class="result-title">backend/src/events.rs:142</span>
+            <span class="result-time">2d ago</span>
+          </div>
+          <div class="result-snippet">
+            <pre class="snippet"><code>match sqlx::Error::Database(ref db) if db.code() == Some("787".into()) =&gt; {
+    tracing::debug!(<mark>"event persist race during session drain"</mark>);
+}</code></pre>
+          </div>
+        </div>
+        <div class="result">
+          <div class="result-head">
+            <span class="result-kind">pr</span>
+            <span class="result-title">#78 · close DELETE race + silence FK 787</span>
+            <span class="result-time">2d ago · merged</span>
+          </div>
+          <div class="result-snippet">
+            Bundles #59 (DELETE race) and #63 (<mark>FK 787 constraint</mark>). Drains event persist queue inside delete transaction…
+          </div>
+        </div>
+        <div class="result">
+          <div class="result-head">
+            <span class="result-kind">event</span>
+            <span class="result-title">pipe-58 builder · stderr</span>
+            <span class="result-time">3d ago</span>
+          </div>
+          <div class="result-snippet">
+            WARN hangard: event persist failed (sid=01KPJA3TZR…): error returned from database: (code: <mark>787</mark>) <mark>FOREIGN KEY constraint</mark> failed
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: COSTS -->
+    <section class="view" id="view-costs" hidden>
+      <div class="view-header">
+        <div>
+          <h1>Costs</h1>
+          <p class="subtitle">Every token, every model, every agent.</p>
+        </div>
+        <div class="view-actions">
+          <button class="btn btn-ghost">Last 30d</button>
+          <button class="btn btn-ghost">Export CSV</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Spend · 30d</div><div class="kpi-value"><span class="num">$284.12</span></div><div class="kpi-sub">avg $9.47/day</div></div>
+        <div class="kpi"><div class="kpi-label">Tokens · 30d</div><div class="kpi-value"><span class="num">14.8M</span></div><div class="kpi-sub">output / 48.2M in</div></div>
+        <div class="kpi"><div class="kpi-label">Active agents</div><div class="kpi-value"><span class="num">12</span></div><div class="kpi-sub">opus · sonnet · haiku · shell</div></div>
+        <div class="kpi"><div class="kpi-label">Burn rate</div><div class="kpi-value"><span class="num">$0.18/min</span><span class="trend trend-up">▲ 4%</span></div><div class="kpi-sub">last hour</div></div>
+      </div>
+
+      <div class="grid-2col">
+        <div class="card card-wide">
+          <div class="card-head">
+            <h3>Daily spend</h3>
+            <div class="chip-row">
+              <span class="chip chip-active">$</span>
+              <span class="chip">tokens</span>
+            </div>
+          </div>
+          <svg class="bar-chart tall" viewBox="0 0 600 180" preserveAspectRatio="none">
+            <g>
+              <rect x="10" y="80" width="16" height="90" class="bar"/>
+              <rect x="30" y="60" width="16" height="110" class="bar"/>
+              <rect x="50" y="100" width="16" height="70" class="bar"/>
+              <rect x="70" y="50" width="16" height="120" class="bar"/>
+              <rect x="90" y="30" width="16" height="140" class="bar"/>
+              <rect x="110" y="90" width="16" height="80" class="bar"/>
+              <rect x="130" y="70" width="16" height="100" class="bar"/>
+              <rect x="150" y="40" width="16" height="130" class="bar"/>
+              <rect x="170" y="20" width="16" height="150" class="bar"/>
+              <rect x="190" y="55" width="16" height="115" class="bar"/>
+              <rect x="210" y="80" width="16" height="90" class="bar"/>
+              <rect x="230" y="60" width="16" height="110" class="bar"/>
+              <rect x="250" y="30" width="16" height="140" class="bar"/>
+              <rect x="270" y="10" width="16" height="160" class="bar"/>
+              <rect x="290" y="50" width="16" height="120" class="bar"/>
+              <rect x="310" y="70" width="16" height="100" class="bar"/>
+              <rect x="330" y="40" width="16" height="130" class="bar"/>
+              <rect x="350" y="20" width="16" height="150" class="bar"/>
+              <rect x="370" y="60" width="16" height="110" class="bar"/>
+              <rect x="390" y="90" width="16" height="80" class="bar"/>
+              <rect x="410" y="80" width="16" height="90" class="bar"/>
+              <rect x="430" y="45" width="16" height="125" class="bar"/>
+              <rect x="450" y="25" width="16" height="145" class="bar"/>
+              <rect x="470" y="10" width="16" height="160" class="bar"/>
+              <rect x="490" y="35" width="16" height="135" class="bar"/>
+              <rect x="510" y="60" width="16" height="110" class="bar"/>
+              <rect x="530" y="40" width="16" height="130" class="bar"/>
+              <rect x="550" y="20" width="16" height="150" class="bar bar-accent"/>
+              <rect x="570" y="50" width="16" height="120" class="bar bar-accent"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>By model</h3></div>
+          <div class="stack-list">
+            <div class="stack-row">
+              <div class="stack-label">opus 4.7</div>
+              <div class="stack-bar"><div class="stack-fill" style="width:68%"></div></div>
+              <div class="stack-val">$193.20</div>
+            </div>
+            <div class="stack-row">
+              <div class="stack-label">sonnet 4.6</div>
+              <div class="stack-bar"><div class="stack-fill" style="width:22%"></div></div>
+              <div class="stack-val">$62.48</div>
+            </div>
+            <div class="stack-row">
+              <div class="stack-label">haiku 4.5</div>
+              <div class="stack-bar"><div class="stack-fill" style="width:8%"></div></div>
+              <div class="stack-val">$21.40</div>
+            </div>
+            <div class="stack-row">
+              <div class="stack-label">shell</div>
+              <div class="stack-bar"><div class="stack-fill" style="width:2%"></div></div>
+              <div class="stack-val">$7.04</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>By project</h3></div>
+          <div class="stack-list">
+            <div class="stack-row"><div class="stack-label">hangar</div><div class="stack-bar"><div class="stack-fill stack-1" style="width:54%"></div></div><div class="stack-val">$154</div></div>
+            <div class="stack-row"><div class="stack-label">omen</div><div class="stack-bar"><div class="stack-fill stack-2" style="width:22%"></div></div><div class="stack-val">$62</div></div>
+            <div class="stack-row"><div class="stack-label">murmur</div><div class="stack-bar"><div class="stack-fill stack-3" style="width:14%"></div></div><div class="stack-val">$40</div></div>
+            <div class="stack-row"><div class="stack-label">ad-hoc</div><div class="stack-bar"><div class="stack-fill stack-4" style="width:10%"></div></div><div class="stack-val">$28</div></div>
+          </div>
+        </div>
+
+        <div class="card card-wide">
+          <div class="card-head">
+            <h3>Cost per PR shipped</h3>
+            <span class="hint-text">Lower = more efficient agents</span>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>PR</th><th>Title</th><th>Agents</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Lines +/-</th><th class="num">$/line</th></tr></thead>
+            <tbody>
+              <tr><td>#78</td><td>DELETE race + FK 787</td><td>6</td><td class="num">1.2M</td><td class="num">$5.12</td><td class="num">+635 -32</td><td class="num">$0.008</td></tr>
+              <tr><td>#77</td><td>cwd on create_session</td><td>5</td><td class="num">812k</td><td class="num">$3.84</td><td class="num">+41 -12</td><td class="num">$0.072</td></tr>
+              <tr><td>#75</td><td>FTS5 escape</td><td>5</td><td class="num">1.1M</td><td class="num">$4.22</td><td class="num">+142 -18</td><td class="num">$0.026</td></tr>
+              <tr><td>#73</td><td>cost/ctx sidebar</td><td>6</td><td class="num">1.5M</td><td class="num">$6.04</td><td class="num">+108 -44</td><td class="num">$0.040</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: VOICE -->
+    <section class="view" id="view-voice" hidden>
+      <div class="view-header">
+        <div>
+          <h1>Voice</h1>
+          <p class="subtitle">Murmur → hangar pipeline. Speak a task, hangar picks it up.</p>
+        </div>
+      </div>
+
+      <div class="voice-stage">
+        <div class="mic-pulse"><span class="mic-core">◎</span></div>
+        <div class="mic-label">Listening · Push-to-talk <span class="kbd">⌥</span><span class="kbd">Space</span></div>
+      </div>
+
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-head"><h3>Transcript</h3><span class="chip chip-active">live</span></div>
+          <div class="transcript">
+            <div class="t-line t-line-me"><span class="t-time">00:03</span><span class="t-text">Dispatch a pipeline for issue seventy one, sidebar switcher, put it on the mac mini, and don't merge the PR without me looking at it.</span></div>
+            <div class="t-line t-line-sys"><span class="t-time">00:05</span><span class="t-text">Parsed: dispatch pipeline #71 · host=macmini · auto-merge=off · manual-review=required. Confirm?</span></div>
+            <div class="t-line t-line-me"><span class="t-time">00:07</span><span class="t-text">Yes go ahead.</span></div>
+            <div class="t-line t-line-sys"><span class="t-time">00:09</span><span class="t-text">Dispatched. Tracking at pipeline #71 on macmini. Will ping you when PR is ready.</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Parsed intent</h3></div>
+          <div class="intent-card">
+            <div class="intent-row"><span class="intent-k">action</span><span class="intent-v">dispatch_pipeline</span></div>
+            <div class="intent-row"><span class="intent-k">issue</span><span class="intent-v">#71</span></div>
+            <div class="intent-row"><span class="intent-k">host</span><span class="intent-v">macmini</span></div>
+            <div class="intent-row"><span class="intent-k">auto_merge</span><span class="intent-v">false</span></div>
+            <div class="intent-row"><span class="intent-k">review_required</span><span class="intent-v">true</span></div>
+            <div class="intent-row"><span class="intent-k">notify</span><span class="intent-v">on_pr_ready</span></div>
+          </div>
+          <div class="intent-confidence">
+            <div class="intent-label">confidence</div>
+            <div class="intent-bar"><div class="intent-fill" style="width:92%"></div></div>
+            <div class="intent-val">92%</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: SETTINGS -->
+    <section class="view" id="view-settings" hidden>
+      <div class="view-header">
+        <div>
+          <h1>Settings</h1>
+          <p class="subtitle">Models, policies, keys, endpoints.</p>
+        </div>
+      </div>
+      <div class="settings-layout">
+        <nav class="settings-nav">
+          <a class="settings-link settings-active">General</a>
+          <a class="settings-link">Models</a>
+          <a class="settings-link">Fleet</a>
+          <a class="settings-link">Dispatch policy</a>
+          <a class="settings-link">Sandbox</a>
+          <a class="settings-link">Notifications</a>
+          <a class="settings-link">MCP</a>
+          <a class="settings-link">API keys</a>
+          <a class="settings-link">Danger zone</a>
+        </nav>
+        <div class="settings-body">
+          <div class="setting-section">
+            <div class="setting-title">Default model</div>
+            <div class="setting-desc">New sessions pick this unless overridden at spawn.</div>
+            <div class="radio-grid">
+              <label class="radio-card radio-on"><input type="radio" checked/><span class="radio-h">opus 4.7</span><span class="radio-s">1M ctx · $0.015/1k</span></label>
+              <label class="radio-card"><input type="radio"/><span class="radio-h">sonnet 4.6</span><span class="radio-s">200k ctx · $0.003/1k</span></label>
+              <label class="radio-card"><input type="radio"/><span class="radio-h">haiku 4.5</span><span class="radio-s">200k ctx · $0.001/1k</span></label>
+            </div>
+          </div>
+          <div class="setting-section">
+            <div class="setting-title">Auto-dispatch host</div>
+            <div class="setting-desc">Where new pipeline runs land by default.</div>
+            <div class="select-mock">
+              <span>macmini (primary)</span>
+              <span class="chev">▾</span>
+            </div>
+          </div>
+          <div class="setting-section">
+            <div class="setting-title">Session budgets</div>
+            <div class="setting-desc">Agent stops and asks when cost crosses the soft limit.</div>
+            <div class="range-row">
+              <div class="range-label">Soft limit</div>
+              <input type="range" min="1" max="50" value="10"/>
+              <div class="range-val">$10</div>
+            </div>
+            <div class="range-row">
+              <div class="range-label">Hard kill</div>
+              <input type="range" min="1" max="100" value="25"/>
+              <div class="range-val">$25</div>
+            </div>
+          </div>
+          <div class="setting-section">
+            <div class="setting-title">Notifications</div>
+            <div class="setting-desc">How hangar pings you when things need attention.</div>
+            <div class="toggle-list">
+              <div class="toggle-row"><span>PR ready for review</span><span class="toggle toggle-on"><span class="toggle-dot"></span></span></div>
+              <div class="toggle-row"><span>Pipeline gate failure</span><span class="toggle toggle-on"><span class="toggle-dot"></span></span></div>
+              <div class="toggle-row"><span>Session awaiting input</span><span class="toggle toggle-on"><span class="toggle-dot"></span></span></div>
+              <div class="toggle-row"><span>Budget soft limit hit</span><span class="toggle toggle-on"><span class="toggle-dot"></span></span></div>
+              <div class="toggle-row"><span>Host went offline</span><span class="toggle toggle-on"><span class="toggle-dot"></span></span></div>
+              <div class="toggle-row"><span>Every tool call</span><span class="toggle"><span class="toggle-dot"></span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
