@@ -353,6 +353,33 @@ Write test results to: $TEST_RESULTS" "$FIX_ROUND"
         fi
       fi
 
+      # Gate 3: Tester artifact validation
+      if [ -f "$TEST_RESULTS" ]; then
+        # Check scenarios.length >= 1
+        SCENARIO_COUNT=$(jq '(.scenarios // []) | length' "$TEST_RESULTS" 2>/dev/null || echo 0)
+        if [ "$SCENARIO_COUNT" -lt 1 ]; then
+          echo "    [pipeline] Gate FAIL: scenarios.length >= 1 required, got $SCENARIO_COUNT"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}scenarios.length >= 1 required (got $SCENARIO_COUNT); "
+        fi
+
+        # Check at least one scenario references issue ID
+        ISSUE_REF=$(jq -e ".scenarios[]? | select(. | test(\"#${ISSUE_NUM}|issue-${ISSUE_NUM}\"))" "$TEST_RESULTS" 2>/dev/null || echo "")
+        if [ -z "$ISSUE_REF" ] && [ "$SCENARIO_COUNT" -gt 0 ]; then
+          echo "    [pipeline] Gate FAIL: at least one scenario must reference issue #$ISSUE_NUM or issue-$ISSUE_NUM"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}scenario must reference issue ID; "
+        fi
+
+        # Check summary non-empty
+        SUMMARY_LEN=$(jq '(.summary // "") | length' "$TEST_RESULTS" 2>/dev/null || echo 0)
+        if [ "$SUMMARY_LEN" -lt 1 ]; then
+          echo "    [pipeline] Gate FAIL: summary must be non-empty"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}summary must be non-empty; "
+        fi
+      fi
+
       if [ "$GATE_PASS" = true ]; then
         TESTS_PASS=true
         log_test_result "$FIX_ROUND" true
