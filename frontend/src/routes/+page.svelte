@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
+	import { deleteSession } from '$lib/api';
 	import SessionTile from '$lib/components/SessionTile.svelte';
 	import SearchPanel from '$lib/components/SearchPanel.svelte';
 	import type { SearchResult } from '$lib/types';
 
 	let searchOpen = $state(false);
+	let clearingExited = $state(false);
+	let clearResult = $state('');
+
+	let exitedCount = $derived(sessionsStore.sessions.filter((s) => s.state === 'exited').length);
 
 	function openSpawn() {
 		dispatchEvent(new CustomEvent('hangar:open-spawn'));
@@ -14,10 +19,43 @@
 	function handleSearchResultClick(result: SearchResult) {
 		goto(`/session/${result.session_id}/replay?t=${result.ts}`);
 	}
+
+	async function clearExited() {
+		const exited = sessionsStore.sessions.filter((s) => s.state === 'exited');
+		if (exited.length === 0) return;
+		clearingExited = true;
+		clearResult = '';
+		let ok = 0;
+		let fail = 0;
+		await Promise.allSettled(
+			exited.map(async (s) => {
+				try {
+					await deleteSession(s.id);
+					sessionsStore.removeSession(s.id);
+					ok++;
+				} catch {
+					fail++;
+				}
+			})
+		);
+		clearingExited = false;
+		clearResult = fail > 0 ? `Removed ${ok}, failed ${fail}` : `Removed ${ok} session${ok !== 1 ? 's' : ''}`;
+		setTimeout(() => (clearResult = ''), 4000);
+	}
 </script>
 
 <div class="grid-page">
 	<div class="page-toolbar">
+		{#if exitedCount > 0}
+			<button
+				class="btn-icon"
+				onclick={clearExited}
+				disabled={clearingExited}
+				title="Delete all exited sessions"
+			>
+				{clearingExited ? '…' : `Clear exited (${exitedCount})`}
+			</button>
+		{/if}
 		<button
 			class="btn-icon"
 			class:active={searchOpen}
@@ -27,6 +65,10 @@
 			🔍
 		</button>
 	</div>
+
+	{#if clearResult}
+		<div class="banner info">{clearResult}</div>
+	{/if}
 
 	{#if searchOpen}
 		<div class="search-section">
@@ -158,6 +200,12 @@
 		background: rgba(244, 67, 54, 0.15);
 		border: 1px solid rgba(244, 67, 54, 0.4);
 		color: #f44336;
+	}
+
+	.banner.info {
+		background: rgba(76, 175, 80, 0.12);
+		border: 1px solid rgba(76, 175, 80, 0.3);
+		color: #4caf50;
 	}
 
 	.banner button {
