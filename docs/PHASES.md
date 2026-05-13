@@ -21,9 +21,9 @@ Phases are ordered by dependency, not by calendar. A phase does not start until 
 |---|---|---|---|
 | 0 | ttyd stopgap dashboard | ✅ | [00-ttyd-stopgap.md](phases/00-ttyd-stopgap.md) |
 | 1 | Cloudflare Tunnel + Access | ⬜ | [01-tunnel.md](phases/01-tunnel.md) |
-| 2 | MVP Command Center (Rust + SvelteKit) | ⬜ | [02-mvp-command-center.md](phases/02-mvp-command-center.md) |
-| 3 | Logs firehose | ⬜ | [03-logs-firehose.md](phases/03-logs-firehose.md) |
-| 4 | Deeper intelligence + Codex driver | ⬜ | [04-intelligence.md](phases/04-intelligence.md) |
+| 2 | MVP Command Center (Rust + SvelteKit) | ✅ | [02-mvp-command-center.md](phases/02-mvp-command-center.md) |
+| 3 | Logs firehose | ✅ | [03-logs-firehose.md](phases/03-logs-firehose.md) |
+| 4 | Deeper intelligence + Codex driver | ✅ | [04-intelligence.md](phases/04-intelligence.md) |
 | 5 | Recording + search | ⬜ | [05-recording-search.md](phases/05-recording-search.md) |
 | 6 | Sandboxing | ⬜ | [06-sandboxing.md](phases/06-sandboxing.md) |
 | 7 | Branching + snapshots | 💭 | [07-branching.md](phases/07-branching.md) |
