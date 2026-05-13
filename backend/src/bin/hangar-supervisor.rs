@@ -319,7 +319,7 @@ fn do_spawn(
     unsafe {
         cmd.pre_exec(move || {
             libc::setsid();
-            libc::ioctl(slave_raw, libc::TIOCSCTTY, 0i32);
+            libc::ioctl(slave_raw, libc::TIOCSCTTY.into(), 0i32);
             libc::dup2(slave_raw, 0);
             libc::dup2(slave_raw, 1);
             libc::dup2(slave_raw, 2);
