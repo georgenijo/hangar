@@ -5,11 +5,9 @@
 	import SearchPanel from '$lib/components/SearchPanel.svelte';
 	import type { SearchResult } from '$lib/types';
 
-	let spawnOpen = $state(false);
 	let searchOpen = $state(false);
 
 	function openSpawn() {
-		spawnOpen = true;
 		dispatchEvent(new CustomEvent('hangar:open-spawn'));
 	}
 
