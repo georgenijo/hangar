@@ -108,6 +108,8 @@
 		{#if !collapsed}
 			<nav class="nav-links">
 				<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>Sessions</a>
+				<a href="/command" class="nav-link" class:active={$page.url.pathname === '/command'}>Command</a>
+				<a href="/fleet" class="nav-link" class:active={$page.url.pathname === '/fleet'}>Fleet</a>
 				<a href="/logs" class="nav-link" class:active={$page.url.pathname === '/logs'}>Logs</a>
 			</nav>
 			{#if aliveSessions.length > 0}

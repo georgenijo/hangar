@@ -11,6 +11,7 @@ export interface AgentMeta {
 	version?: string | null;
 	model?: string | null;
 	tokens_used: number;
+	cost_dollars?: number | null;
 	last_tool_call?: string | null;
 }
 
@@ -207,3 +208,45 @@ export type LogWsMessage =
 	| { type: 'initial_tail_complete' }
 	| { type: 'lagged'; dropped: number }
 	| { type: 'set_sources'; sources: string[] };
+
+export interface HostMetrics {
+	hostname: string;
+	cpu_pct: number;
+	ram_pct: number;
+	disk_pct: number;
+	ram_total_gb: number;
+	disk_total_gb: number;
+}
+
+export interface DailyCost {
+	date: string;
+	usd: number;
+	tokens: number;
+}
+
+export interface DailyCostsResponse {
+	days: DailyCost[];
+}
+
+export interface PipelineGate {
+	smoke: boolean | null;
+	shots: number;
+	scenarios: number;
+}
+
+export interface PipelineRun {
+	issue: number;
+	title: string;
+	state: string;
+	phase: string;
+	host: string;
+	agents: unknown[];
+	cost_usd: number;
+	tokens: number;
+	started_at: string;
+	gate: PipelineGate;
+}
+
+export interface PipelineRunsResponse {
+	runs: PipelineRun[];
+}

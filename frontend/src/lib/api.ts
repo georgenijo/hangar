@@ -9,7 +9,10 @@ import type {
 	SearchResult,
 	WorktreeTreeResponse,
 	WorktreeFileResponse,
-	WorktreeDiffResponse
+	WorktreeDiffResponse,
+	HostMetrics,
+	DailyCostsResponse,
+	PipelineRunsResponse
 } from './types';
 
 export class ApiError extends Error {
@@ -199,4 +202,19 @@ export function kindIcon(k: SessionKind): string {
 		case 'codex':
 			return 'bot';
 	}
+}
+
+export async function getHostMetrics(): Promise<HostMetrics> {
+	const res = await checkOk(await fetch('/api/v1/metrics/host'));
+	return res.json();
+}
+
+export async function getDailyCosts(): Promise<DailyCostsResponse> {
+	const res = await checkOk(await fetch('/api/v1/costs/daily'));
+	return res.json();
+}
+
+export async function getPipelineRuns(): Promise<PipelineRunsResponse> {
+	const res = await checkOk(await fetch('/api/v1/pipeline/runs'));
+	return res.json();
 }

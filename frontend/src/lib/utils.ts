@@ -1,8 +1,9 @@
 import type { SessionState } from './types';
 
 export function formatIdleTime(lastActivityAt: number): string {
+	if (!Number.isFinite(lastActivityAt)) return '—';
 	const diffMs = Date.now() - lastActivityAt;
-	const secs = Math.floor(diffMs / 1000);
+	const secs = Math.max(0, Math.floor(diffMs / 1000));
 	if (secs < 60) return `${secs}s`;
 	const mins = Math.floor(secs / 60);
 	if (mins < 60) return `${mins}m`;
@@ -13,7 +14,7 @@ export function formatIdleTime(lastActivityAt: number): string {
 }
 
 export function formatTokens(n: number): string {
-	if (!n) return '—';
+	if (n == null || !Number.isFinite(n)) return '—';
 	return new Intl.NumberFormat().format(n);
 }
 
@@ -41,4 +42,9 @@ export function stateColor(state: SessionState): string {
 
 export function isActiveState(state: SessionState): boolean {
 	return state === 'booting' || state === 'idle' || state === 'streaming' || state === 'awaiting';
+}
+
+const IN_FLIGHT_STATES = new Set(['running', 'queued', 'pending', 'in_progress']);
+export function isPipelineInFlight(state: string): boolean {
+	return IN_FLIGHT_STATES.has(state.toLowerCase());
 }
