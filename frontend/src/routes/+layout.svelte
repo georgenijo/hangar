@@ -11,8 +11,6 @@
 
 	// hook test edit
 	let spawnOpen = $state(false);
-	let leaderPending = $state(false);
-	let leaderTimer: ReturnType<typeof setTimeout> | null = null;
 	let collapsed = $derived(sidebarStore.dashboardCollapsed);
 
 	$effect(() => {
@@ -29,9 +27,12 @@
 	});
 
 	$effect(() => {
+		let leaderPending = false;
+		let leaderTimer: ReturnType<typeof setTimeout> | null = null;
+
 		function onKey(e: KeyboardEvent) {
 			const tag = (e.target as HTMLElement).tagName;
-			if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+			if (tag === 'INPUT' || tag === 'TEXTAREA' || !!(e.target as HTMLElement).closest('[contenteditable]')) return;
 
 			if (e.ctrlKey && e.key === '\\') {
 				e.preventDefault();
