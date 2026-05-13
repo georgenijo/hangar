@@ -16,7 +16,7 @@ use crate::events::{AgentEvent, Event, EventBus};
 use crate::raw_fd_master::RawFdMaster;
 use crate::ringbuf::{RingBuf, DEFAULT_CAPACITY};
 use crate::sandbox::{SandboxState, SandboxStatus};
-use crate::session::{Session, SessionId, SessionState};
+use crate::session::{AgentMeta, Session, SessionId, SessionState};
 use crate::util;
 
 /// Reap a PTY child process to prevent it lingering as a zombie.
@@ -179,6 +179,8 @@ fn spawn_watchdog(
         let mut event_timestamps: VecDeque<i64> = VecDeque::new();
         let mut last_activity_ms: i64 = 0;
         let sid_str = session_id.to_string();
+        let mut agent_meta: Option<AgentMeta> = None;
+        let mut meta_dirty = false;
 
         loop {
             std::thread::sleep(Duration::from_secs(5));
@@ -187,19 +189,71 @@ fn spawn_watchdog(
             loop {
                 match event_rx.try_recv() {
                     Ok((sid, Event::AgentEvent { event, .. })) if sid == sid_str => {
-                        last_event = Some(event);
                         let ts = crate::util::now_ms() as i64;
                         event_timestamps.push_back(ts);
                         if event_timestamps.len() > 20 {
                             event_timestamps.pop_front();
                         }
                         last_activity_ms = ts;
+
+                        let meta = agent_meta.get_or_insert_with(|| AgentMeta {
+                            name: "claude_code".to_string(),
+                            version: None,
+                            model: None,
+                            tokens_used: 0,
+                            last_tool_call: None,
+                            context_pct: None,
+                            cost_dollars: None,
+                        });
+
+                        match &event {
+                            AgentEvent::ModelChanged { model } => {
+                                meta.model = Some(model.clone());
+                                meta_dirty = true;
+                            }
+                            AgentEvent::TurnFinished { tokens_used, .. } => {
+                                meta.tokens_used += *tokens_used as u64;
+                                meta_dirty = true;
+                            }
+                            AgentEvent::ToolCallStarted { tool, .. } => {
+                                meta.last_tool_call = Some(tool.clone());
+                                meta_dirty = true;
+                            }
+                            AgentEvent::ContextWindowSizeChanged { pct_used, .. } => {
+                                meta.context_pct = Some(*pct_used);
+                                meta_dirty = true;
+                            }
+                            AgentEvent::CostUpdated { dollars } => {
+                                meta.cost_dollars = Some(*dollars);
+                                meta_dirty = true;
+                            }
+                            _ => {}
+                        }
+
+                        last_event = Some(event);
                     }
                     Ok(_) => {}
                     Err(broadcast::error::TryRecvError::Empty) => break,
-                    Err(broadcast::error::TryRecvError::Lagged(_)) => break,
+                    Err(broadcast::error::TryRecvError::Lagged(n)) => {
+                        tracing::warn!(
+                            session_id = %sid_str,
+                            dropped = n,
+                            "watchdog lagged: agent_meta may be stale for dropped events",
+                        );
+                    }
                     Err(broadcast::error::TryRecvError::Closed) => return,
                 }
+            }
+
+            if meta_dirty {
+                if let Some(ref meta) = agent_meta {
+                    let _ = handle.block_on(Session::update_agent_meta(
+                        &db_pool,
+                        &session_id,
+                        meta,
+                    ));
+                }
+                meta_dirty = false;
             }
 
             let current = current_state.lock().unwrap().clone();
