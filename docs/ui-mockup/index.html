@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hangar UI Mockup</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --bg: #0e0e10;
+    --bg-surface: #1a1a1e;
+    --bg-hover: #222228;
+    --accent: #9cf;
+    --border: #2a2a30;
+    --text: #eee;
+    --text-muted: #888;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --font-sans: system-ui, -apple-system, sans-serif;
+    --radius: 6px;
+  }
+  body { margin: 0; font: 14px/1.5 var(--font-sans); background: var(--bg); color: var(--text); }
+
+  /* Navigation tabs to switch sections */
+  .nav { display: flex; background: var(--bg-surface); border-bottom: 1px solid var(--border); padding: 0 16px; }
+  .nav button { background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); padding: 12px 16px; cursor: pointer; font: inherit; font-size: 0.9rem; }
+  .nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .section { display: none; padding: 20px 24px; }
+  .section.active { display: block; }
+
+  /* Shared card */
+  .card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .card-header h2 { margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .badge-count { font-size: 0.72rem; font-family: var(--font-mono); background: var(--bg-hover); color: var(--text-muted); padding: 1px 7px; border-radius: 10px; }
+
+  /* ── COMMAND SECTION ── */
+
+  /* KPI row */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .kpi-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .kpi-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .kpi-value { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 600; color: var(--text); line-height: 1.1; }
+
+  /* Mid row: chart + gauges */
+  .mid-row { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+  /* Spend bar chart */
+  .chart-card { display: flex; flex-direction: column; }
+  .chart-placeholder { background: var(--bg); border-radius: 4px; height: 160px; display: flex; align-items: flex-end; gap: 6px; padding: 12px 8px 28px; position: relative; }
+  .bar { background: var(--accent); border-radius: 3px 3px 0 0; flex: 1; opacity: 0.8; }
+  .chart-placeholder .x-labels { position: absolute; bottom: 6px; left: 8px; right: 8px; display: flex; justify-content: space-around; }
+  .chart-placeholder .x-labels span { font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); }
+  .y-label { position: absolute; left: 0; font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); }
+
+  /* Fleet gauges (compact, CommandView) */
+  .gauges-card { display: flex; flex-direction: column; }
+  .gauges-row { display: flex; gap: 16px; justify-content: center; align-items: center; flex: 1; padding: 8px 0; }
+  .gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .gauge-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .gauge-sub { font-size: 0.68rem; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* Sessions list */
+  .session-list { display: flex; flex-direction: column; gap: 2px; }
+  .session-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; transition: background 0.1s; }
+  .session-row:hover { background: var(--bg-hover); }
+  .session-slug { flex: 1; font-family: var(--font-mono); font-size: 0.85rem; }
+  .state-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+  .ctx-pct { font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+  .cost-pill { font-size: 0.75rem; font-family: var(--font-mono); color: var(--accent); white-space: nowrap; min-width: 3.5rem; text-align: right; }
+
+  /* Pipeline list */
+  .pipeline-list { display: flex; flex-direction: column; gap: 2px; }
+  .pipeline-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius); font-size: 0.82rem; }
+  .pipeline-row:hover { background: var(--bg-hover); }
+  .pipeline-issue { font-family: var(--font-mono); font-weight: 600; color: var(--accent); min-width: 3rem; }
+  .pipeline-state { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 10px; }
+  .pipeline-state.running { background: color-mix(in srgb, #4caf50 18%, transparent); color: #4caf50; }
+  .pipeline-state.completed { background: color-mix(in srgb, #5b8bd4 18%, transparent); color: #5b8bd4; }
+  .pipeline-state.failed { background: color-mix(in srgb, #f44336 18%, transparent); color: #f44336; }
+  .pipeline-phase { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); flex: 1; }
+  .pipeline-host, .pipeline-age { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); }
+
+  /* ── FLEET SECTION ── */
+  .fleet-layout { max-width: 680px; display: flex; flex-direction: column; gap: 16px; }
+  .host-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .host-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .hostname { margin: 0; font-size: 1rem; font-weight: 600; font-family: var(--font-mono); }
+  .sessions-badge { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 12px; }
+  .spec-line { font-size: 0.82rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 16px; }
+  .fleet-gauges { display: flex; gap: 28px; justify-content: center; padding-top: 8px; }
+  .empty-remote { padding: 16px 20px; background: var(--bg-surface); border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text-muted); font-size: 0.85rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <button class="active" onclick="show('command')">COMMAND</button>
+  <button onclick="show('fleet')">FLEET</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- COMMAND SECTION                                            -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="command" class="section active">
+
+  <!-- KPI row: 4 cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Sessions Active</div>
+      <div class="kpi-value">3</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Cost Today</div>
+      <div class="kpi-value">$1.24</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Tokens Today</div>
+      <div class="kpi-value">48,200</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Pipelines Running</div>
+      <div class="kpi-value">1</div>
+    </div>
+  </div>
+
+  <!-- Mid row: spend chart + fleet gauges -->
+  <div class="mid-row">
+
+    <!-- 7-day spend bar chart -->
+    <div class="card chart-card">
+      <div class="card-header"><h2>Spend, last 7 days</h2></div>
+      <div class="chart-placeholder">
+        <!-- simulated bars at varying heights to show scale -->
+        <div class="bar" style="height:30%"></div>
+        <div class="bar" style="height:55%"></div>
+        <div class="bar" style="height:20%"></div>
+        <div class="bar" style="height:80%"></div>
+        <div class="bar" style="height:45%"></div>
+        <div class="bar" style="height:100%"></div>
+        <div class="bar" style="height:60%"></div>
+        <div class="x-labels">
+          <span>05-07</span><span>05-08</span><span>05-09</span><span>05-10</span>
+          <span>05-11</span><span>05-12</span><span>05-13</span>
+        </div>
+        <span class="y-label" style="top:4px">$1.24</span>
+        <span class="y-label" style="top:50%">$0.62</span>
+        <span class="y-label" style="bottom:28px">$0</span>
+      </div>
+    </div>
+
+    <!-- Fleet gauges (compact row) -->
+    <div class="card gauges-card">
+      <div class="card-header"><h2>Host</h2><span style="margin-left:auto;font-size:0.78rem;font-family:var(--font-mono);color:var(--text-muted)">mac-mini</span></div>
+      <div class="gauges-row">
+        <!-- CPU ring -->
+        <div class="gauge-wrap">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--border)" stroke-width="8"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="#f5c518" stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="201.1"
+              stroke-dashoffset="100.5"
+              transform="rotate(-90 40 40)"/>
+            <text x="40" y="40" dominant-baseline="middle" text-anchor="middle" font-size="13" font-family="var(--font-mono)" fill="var(--text)">50%</text>
+          </svg>
+          <div class="gauge-label">CPU</div>
+        </div>
+        <!-- RAM ring -->
+        <div class="gauge-wrap">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--border)" stroke-width="8"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="#4caf50" stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="201.1"
+              stroke-dashoffset="130.7"
+              transform="rotate(-90 40 40)"/>
+            <text x="40" y="40" dominant-baseline="middle" text-anchor="middle" font-size="13" font-family="var(--font-mono)" fill="var(--text)">35%</text>
+          </svg>
+          <div class="gauge-label">RAM</div>
+        </div>
+        <!-- Disk ring -->
+        <div class="gauge-wrap">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--border)" stroke-width="8"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="#4caf50" stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="201.1"
+              stroke-dashoffset="160.9"
+              transform="rotate(-90 40 40)"/>
+            <text x="40" y="40" dominant-baseline="middle" text-anchor="middle" font-size="13" font-family="var(--font-mono)" fill="var(--text)">20%</text>
+          </svg>
+          <div class="gauge-label">Disk</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Active sessions list -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <h2>Active sessions</h2>
+      <span class="badge-count">3</span>
+    </div>
+    <div class="session-list">
+      <div class="session-row">
+        <span class="session-slug">fix-auth-middleware</span>
+        <span class="state-badge" style="background:color-mix(in srgb,#4caf50 18%,transparent);color:#4caf50">● streaming</span>
+        <span class="ctx-pct">12,400 tok</span>
+        <span class="cost-pill">$0.42</span>
+      </div>
+      <div class="session-row">
+        <span class="session-slug">refactor-api-layer</span>
+        <span class="state-badge" style="background:color-mix(in srgb,#ff9800 18%,transparent);color:#ff9800">awaiting</span>
+        <span class="ctx-pct">8,100 tok</span>
+        <span class="cost-pill">$0.29</span>
+      </div>
+      <div class="session-row">
+        <span class="session-slug">docs-update</span>
+        <span class="state-badge" style="background:color-mix(in srgb,#5b8bd4 18%,transparent);color:#5b8bd4">idle</span>
+        <span class="ctx-pct">2,300 tok</span>
+        <span class="cost-pill">$0.08</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pipelines in flight -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Pipeline runs</h2>
+      <span class="badge-count">2</span>
+    </div>
+    <div class="pipeline-list">
+      <div class="pipeline-row">
+        <span class="pipeline-issue">#87</span>
+        <span class="pipeline-state running">running</span>
+        <span class="pipeline-phase">impl</span>
+        <span class="pipeline-host">mac-mini</span>
+        <span class="pipeline-age">4m ago</span>
+      </div>
+      <div class="pipeline-row">
+        <span class="pipeline-issue">#86</span>
+        <span class="pipeline-state completed">completed</span>
+        <span class="pipeline-phase">merged</span>
+        <span class="pipeline-host">mac-mini</span>
+        <span class="pipeline-age">2h ago</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /command -->
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- FLEET SECTION                                              -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="fleet" class="section">
+  <div class="fleet-layout">
+
+    <h1 style="margin:0 0 16px;font-size:1.2rem;font-weight:700;color:var(--text)">Fleet</h1>
+
+    <!-- Localhost host card -->
+    <div class="host-card">
+      <div class="host-card-header">
+        <h2 class="hostname">mac-mini</h2>
+        <span class="sessions-badge">3 sessions</span>
+      </div>
+      <div class="spec-line">RAM 64 GB · Disk 512 GB</div>
+
+      <div class="fleet-gauges">
+        <!-- CPU -->
+        <div class="gauge-wrap">
+          <svg width="88" height="88" viewBox="0 0 88 88">
+            <circle cx="44" cy="44" r="36" fill="none" stroke="var(--border)" stroke-width="8"/>
+            <circle cx="44" cy="44" r="36" fill="none" stroke="#f5c518" stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="226.2"
+              stroke-dashoffset="113.1"
+              transform="rotate(-90 44 44)"/>
+            <text x="44" y="44" dominant-baseline="middle" text-anchor="middle" font-size="13" font-family="var(--font-mono)" fill="var(--text)">50%</text>
+          </svg>
+          <div class="gauge-label">CPU</div>
+        </div>
+        <!-- RAM -->
+        <div class="gauge-wrap">
+          <svg width="88" height="88" viewBox="0 0 88 88">
+            <circle cx="44" cy="44" r="36" fill="none" stroke="var(--border)" stroke-width="8"/>
+            <circle cx="44" cy="44" r="36" fill="none" stroke="#4caf50" stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="226.2"
+              stroke-dashoffset="147"
+              transform="rotate(-90 44 44)"/>
+            <text x="44" y="44" dominant-baseline="middle" text-anchor="middle" font-size="13" font-family="var(--font-mono)" fill="var(--text)">35%</text>
+          </svg>
+          <div class="gauge-label">RAM</div>
+          <div class="gauge-sub">22 / 64 GB</div>
+        </div>
+        <!-- Disk -->
+        <div class="gauge-wrap">
+          <svg width="88" height="88" viewBox="0 0 88 88">
+            <circle cx="44" cy="44" r="36" fill="none" stroke="var(--border)" stroke-width="8"/>
+            <circle cx="44" cy="44" r="36" fill="none" stroke="#4caf50" stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="226.2"
+              stroke-dashoffset="181"
+              transform="rotate(-90 44 44)"/>
+            <text x="44" y="44" dominant-baseline="middle" text-anchor="middle" font-size="13" font-family="var(--font-mono)" fill="var(--text)">20%</text>
+          </svg>
+          <div class="gauge-label">Disk</div>
+          <div class="gauge-sub">102 / 512 GB</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Remote hosts empty state -->
+    <div class="empty-remote">
+      No remote hosts — single-host mode
+    </div>
+
+  </div>
+</div><!-- /fleet -->
+
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
