@@ -68,6 +68,15 @@ pub mod status_scraper {
                 None => true,
             };
             if values_changed || heartbeat_due {
+                tracing::debug!(
+                    pct,
+                    tokens_k,
+                    dollars,
+                    prev_dollars = ?state.last_dollars,
+                    values_changed,
+                    heartbeat_due,
+                    "scraper: emitting status update",
+                );
                 state.last_dollars = Some(dollars);
                 state.last_pct = Some(pct);
                 state.last_tokens_k = Some(tokens_k);
@@ -176,6 +185,24 @@ pub mod status_scraper {
             // tokens_k changes (32 vs 30), pct stays 3%
             let evs = scrape_status("CTX 3% 32k $0.11 | foo | claude-opus-4-7 |", &mut state);
             assert!(evs.len() >= 2);
+        }
+
+        #[test]
+        fn scrape_status_latest_match_wins_when_buffer_has_multiple() {
+            // Two status lines in same buffer — scraper must take the later (higher) cost.
+            let mut state = ScraperState::default();
+            let chunk = "CTX 4% 40k $0.21 | foo | claude-opus-4-7 | CTX 4% 40k $0.27 | foo | claude-opus-4-7 |";
+            let evs = scrape_status(chunk, &mut state);
+            assert!(evs.iter().any(|e| matches!(e, AgentEvent::CostUpdated { dollars } if (*dollars - 0.27).abs() < 1e-6)));
+        }
+
+        #[test]
+        fn scrape_status_emits_cost_update_when_only_cost_changes() {
+            let mut state = ScraperState::default();
+            scrape_status("CTX 4% 40k $0.21 | foo | claude-opus-4-7 |", &mut state);
+            // Same pct and tokens, only cost changed.
+            let evs = scrape_status("CTX 4% 40k $0.27 | foo | claude-opus-4-7 |", &mut state);
+            assert!(evs.iter().any(|e| matches!(e, AgentEvent::CostUpdated { dollars } if (*dollars - 0.27).abs() < 1e-6)));
         }
     }
 }
