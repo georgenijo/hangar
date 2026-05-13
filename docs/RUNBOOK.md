@@ -155,6 +155,58 @@ The PR waits for CI to go green, then squash-merges. If CI fails, PR stays open 
 
 ---
 
+## Configuring the /logs firehose
+
+The `/logs` dashboard page tails live log sources declared in
+`~/.config/hangar/config.toml` (macOS: `~/Library/Application Support/hangar/config.toml`).
+
+### Enable and declare sources
+
+```toml
+[logs]
+enabled = true
+tail_lines = 500      # lines replayed on initial page load
+
+# macOS unified log stream (all sources)
+[[logs.sources]]
+name = "system"
+kind = "journalctl"
+
+# Single systemd/launchd unit (Linux: journalctl -u <unit>)
+[[logs.sources]]
+name = "caddy"
+kind = "unit"
+path = "caddy.service"
+
+# Arbitrary log file (absolute path, tailed like `tail -f`)
+[[logs.sources]]
+name = "hangard"
+kind = "file"
+path = "/var/log/hangar/hangard.log"
+
+# PTY scrollback from a running session
+[[logs.sources]]
+name = "claude-session"
+kind = "pane_scrollback"
+session_id = "<session-ulid>"
+```
+
+### Source types
+
+| kind | description | required field |
+|------|-------------|----------------|
+| `journalctl` | `journalctl -f` (all units) | — |
+| `unit` | single systemd unit | `path = "unit.service"` |
+| `file` | tails a log file | `path = "/abs/path.log"` |
+| `pane_scrollback` | session PTY ring buffer | `session_id = "<ulid>"` |
+
+### Filtering
+
+Click source name chips at the top of `/logs` to show/hide individual sources.
+The search box accepts regular expressions applied across visible lines.
+
+---
+
 ## Health checks
 
 ```bash
