@@ -44,7 +44,15 @@ impl LogsHub {
 
     pub fn start(&mut self) {
         if !self.enabled {
+            tracing::info!(
+                "logs firehose disabled — set [logs] enabled = true in config.toml to activate"
+            );
             return;
+        }
+        if self.sources.is_empty() {
+            tracing::warn!(
+                "logs firehose enabled but no sources configured — add [[logs.sources]] entries in config.toml"
+            );
         }
         for source in &self.sources {
             let tx = self.tx.clone();
