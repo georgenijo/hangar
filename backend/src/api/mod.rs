@@ -1,6 +1,7 @@
 pub mod broadcast;
 pub mod costs;
 pub mod events;
+pub mod host_metrics;
 pub mod key;
 pub mod logs;
 pub mod metrics;
@@ -79,6 +80,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/search", get(search::search))
         .route("/api/v1/broadcast", post(broadcast::broadcast))
         .route("/api/v1/metrics", get(metrics::get_metrics))
+        .route("/api/v1/metrics/host", get(host_metrics::get_host_metrics))
         .route("/api/v1/costs/daily", get(costs::costs_daily))
         .route("/api/v1/costs/by-model", get(costs::costs_by_model))
         .route("/api/v1/logs/sources", get(logs::list_sources))
