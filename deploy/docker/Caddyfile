@@ -1,0 +1,22 @@
+:8080 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy localhost:3000
+	}
+
+	handle /ws/* {
+		reverse_proxy localhost:3000
+	}
+
+	handle {
+		root * /var/www/hangar
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

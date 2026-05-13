@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `deploy/docker/Dockerfile` — multi-stage build: Rust release binaries + frontend bundle into a Debian-slim runtime with Caddy.
+- `deploy/docker/compose.yml` — local + cloud-VM deployment recipe. Named volume for state, host port `:8080` published.
+- `deploy/docker/entrypoint.sh` — starts supervisor + Caddy + hangard inside the container.
+- `deploy/docker/Caddyfile` — container-internal reverse proxy (replaces the host Caddy install).
+- `scripts/deploy.sh container build|up|down|logs` — primary local workflow.
+- ADR-0017 — containerized deployment, OrbStack on the Mac mini host.
+
+### Changed
+
+- Host migration: retired the Dell OptiPlex 7050. New host is `george-mac-mini` (Apple M4, 24 GB RAM, macOS) running OrbStack.
+- `README.md` + `docs/ARCHITECTURE.md` updated to reflect container-first deployment model.
+- `scripts/deploy.sh backend` subcommand kept for the cloud-VM-with-systemd path; default local path is now `container`.
+
+### Deprecated
+
+- Issues #88 (sandbox `cfg(target_os = "linux")` gate) and #89 (launchd plists) — deprioritized but not closed. Only matter if a future native-macOS build path is wanted; the container is the canonical artifact.
+
 ## [0.2.0] - 2026-04-17
 
 ### Added

@@ -6,7 +6,7 @@ One-page system design. Written for humans and for AI agents working in this rep
 
 ## Elevator pitch
 
-hangar is a single-binary Rust backend that owns terminal sessions (PTYs), wraps known agents (Claude Code, Codex, shell) with smart drivers, and exposes a REST + WebSocket API. A SvelteKit frontend renders a command-center dashboard. The stack runs on a dedicated box reachable over Tailscale today and via Cloudflare Tunnel with SSO later.
+hangar is a single-binary Rust backend that owns terminal sessions (PTYs), wraps known agents (Claude Code, Codex, shell) with smart drivers, and exposes a REST + WebSocket API. A SvelteKit frontend renders a command-center dashboard. The whole stack ships as a Linux container that runs locally under OrbStack on a Mac mini today, and identically on any cloud Linux VM (AWS EC2, Oracle Cloud, etc.) — see [ADR-0017](decisions/0017-containerize-deployment.md). Public access is via Cloudflare Tunnel with SSO.
 
 ---
 
@@ -125,15 +125,15 @@ Backups: add these paths to the box's existing restic job.
 
 ## Process model
 
-Single Rust binary `hangard` runs under systemd as user `george`. Responsibilities:
+Inside the container, three processes run side-by-side (started by `deploy/docker/entrypoint.sh`):
 
-1. **HTTP server** (axum + tokio) on `localhost:3000`
-2. **PTY supervisor**: spawns child processes, streams I/O, monitors exit
-3. **Agent drivers** run as async tasks per session, parsing output, emitting structured events
-4. **Event bus**: `tokio::sync::broadcast` channel fan-out to WebSocket subscribers + persistent log writer + push dispatcher
-5. **Metrics + logs**: logs to stdout (systemd captures to journald), metrics at `/api/metrics`
+1. **`hangar-supervisor`** — holds PTY file descriptors over a Unix socket so sessions survive `hangard` restarts ([ADR-0010](decisions/0010-sessions-survive-restart.md))
+2. **`hangard`** — HTTP server (axum + tokio) on `:3000`, PTY spawn/IO via the supervisor socket, agent drivers, event bus, SQLite + ring-buffer writes
+3. **`caddy`** — reverse proxy on `:8080`, serves the SvelteKit SPA and routes `/api/*` + `/ws/*` to `hangard`
 
-**Crash recovery**: on restart, backend scans SQLite for sessions in non-terminal states. A small supervisor daemon (or systemd-managed re-parenting) holds PTY fds via Unix socket so sessions survive backend restarts. See [ADR-0010](decisions/0010-sessions-survive-restart.md).
+Only port `:8080` is published to the host. State (`hangar.db`, ring files, supervisor socket) lives in a named volume mounted at `/state`. The backend honors `HANGAR_STATE_DIR` so paths stay clean.
+
+**Crash recovery**: within the container, supervisor + backend retain the existing pattern — backend can crash and reconnect to supervisor without losing PTYs. If the container itself is killed (`docker stop`, host reboot), sessions reset; the SPA reconnects automatically on the next launch.
 
 ---
 
@@ -192,11 +192,15 @@ See [ADR-0006](decisions/0006-no-sandbox-mvp.md) and the sandbox phase doc.
 
 ## Environment
 
-- **Host**: Dell OptiPlex 7050, i5-7500T, 8 GB RAM, 500 GB HDD, Ubuntu 24.04
-- **Tailnet hostname**: `optiplex` (IP 100.103.161.109)
-- **User**: `george` (passwordless sudo)
-- **Existing services**: tmux `work` session, cockpit on `:9090`, ttyd on `:7681`, restic backups
-- **New services** (Phase 0+): ttyd-codex/wave/issue12 systemd units, caddy on `:8080`
+- **Host**: `george-mac-mini` — Apple M4, 24 GB RAM, macOS
+- **Runtime**: [OrbStack](https://orbstack.dev) — Linux container engine on macOS
+- **Image**: built from `deploy/docker/Dockerfile`, runs under Docker / OrbStack / Podman
+- **State**: named volume `hangar-state` → container `/state`
+- **Published port**: `:8080` (Caddy)
+- **Public access**: Cloudflare Tunnel (Phase 1) — repointed from the retired optiplex host to the Mac mini
+- **Cloud VM compatibility**: the same image runs on any Linux VM (AWS EC2, Oracle Cloud free tier, Hetzner, Fly) via `docker compose up -d`
+
+The Dell OptiPlex 7050 that hosted v0.1.0–v0.2.0 is retired ([ADR-0017](decisions/0017-containerize-deployment.md)).
 
 ---
 

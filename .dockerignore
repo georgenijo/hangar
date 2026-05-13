@@ -1,0 +1,31 @@
+# Build artifacts
+backend/target
+frontend/node_modules
+frontend/build
+frontend/.svelte-kit
+
+# VCS
+.git
+.gitignore
+
+# Local / editor / OS
+.DS_Store
+.vscode
+.idea
+*.swp
+
+# Docs / non-code (keep build context lean)
+docs
+prompts
+caddy
+systemd
+web
+.pipeline
+pipeline-logs
+*.md
+!README.md
+
+# State / logs that shouldn't ever ship
+**/*.log
+**/.local
+**/.cache
