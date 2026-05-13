@@ -44,6 +44,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 toml = "0.8"
 notify = "6"
 clap = { version = "4", features = ["derive"] }
+sysinfo = { version = "0.32", default-features = false, features = ["system", "disk"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
