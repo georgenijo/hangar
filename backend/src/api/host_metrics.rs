@@ -33,12 +33,22 @@ pub async fn get_host_metrics() -> Json<HostMetrics> {
     };
 
     let disks = Disks::new_with_refreshed_list();
-    let (disk_total, disk_used) = disks.iter().fold((0u64, 0u64), |(t, u), d| {
-        (
-            t + d.total_space(),
-            u + d.total_space().saturating_sub(d.available_space()),
-        )
-    });
+    // Exclude virtual/network/bind-mount filesystems that inflate totals inside
+    // containers (e.g. fuse.grpcfuse is OrbStack's macOS bind mount, overlay
+    // is the container root layer, tmpfs/devtmpfs are in-memory).
+    const EXCLUDED_FS: &[&str] = &["tmpfs", "devtmpfs", "overlay", "fuse.grpcfuse", "fuse"];
+    let (disk_total, disk_used) = disks
+        .iter()
+        .filter(|d| {
+            let fs = d.file_system().to_string_lossy().to_lowercase();
+            !EXCLUDED_FS.iter().any(|ex| fs.contains(ex))
+        })
+        .fold((0u64, 0u64), |(t, u), d| {
+            (
+                t + d.total_space(),
+                u + d.total_space().saturating_sub(d.available_space()),
+            )
+        });
     let disk_total_gb = disk_total as f64 / (1024.0 * 1024.0 * 1024.0);
     let disk_pct = if disk_total > 0 {
         disk_used as f64 / disk_total as f64 * 100.0
