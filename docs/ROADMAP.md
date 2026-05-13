@@ -92,4 +92,5 @@ Each phase has its own `docs/phases/<NN>-*.md` with explicit acceptance criteria
 3. **Every deferred feature gets an issue** — so nothing quietly disappears
 4. **Document choices as ADRs** — future Claude sessions should be able to understand "why" without asking
 5. **Tmux keeps running** during the whole build — the stopgap dashboard is kept working until hangar's own UI fully replaces it
+6. **One artifact, many hosts** — hangar ships as a Linux container image. The Mac mini under OrbStack is the daily host; any cloud Linux VM is a drop-in alternative. See [ADR-0017](decisions/0017-containerize-deployment.md).
 

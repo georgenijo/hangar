@@ -1,8 +1,8 @@
 # hangar
 
-**Personal agent operating system.** A self-hosted control plane for AI coding agents (Claude Code, Codex, and others), running on a dedicated always-on box. Think `tmux + kubectl + OBS` reimagined for someone who lives inside multiple Claude sessions.
+**Personal agent operating system.** A self-hosted control plane for AI coding agents (Claude Code, Codex, and others), shipped as a Linux container that runs locally under OrbStack on a Mac and identically on any cloud Linux VM. Think `tmux + kubectl + OBS` reimagined for someone who lives inside multiple Claude sessions.
 
-Status: early. Phase 0 shipped (ttyd + caddy stopgap dashboard). Phase 1+ in planning. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Status: v0.2.0 shipped Phase 2 MVP (Rust backend, SvelteKit dashboard, ntfy push, REST prompt API). Now migrating from the original optiplex host to a containerized deploy on the Mac mini ([ADR-0017](docs/decisions/0017-containerize-deployment.md)).
 
 ---
 
@@ -25,23 +25,32 @@ hangar is the tool that sits above tmux (and later replaces it) to give you a re
 ## Who this is for
 
 - Solo developers running multi-session AI-agent workflows
-- Anyone who has a dedicated always-on box (home server, cloud VM) and a laptop/phone they hop between
+- Anyone who has an always-on box (Mac mini, home server, cloud VM) and a laptop/phone they hop between
 - People who want to build on top of a typed session/agent model rather than scrape ANSI terminal bytes
 
 Not for: shared team installs, multi-tenant SaaS, or people who are happy with a single terminal window.
 
 ---
 
-## What's here today (Phase 0)
+## What's here today (v0.2.0, containerizing in progress)
 
 ```
-./caddy/Caddyfile           Reverse proxy :8080 → ttyd backends + static dashboard
-./systemd/ttyd-*.service    One ttyd per tmux session (codex, wave, issue12)
-./web/index.html            Static dashboard: tabs, grid view, reload buttons
-./scripts/deploy.sh         Installs units, reloads caddy
+./backend/                  Rust backend (hangard + hangar-supervisor)
+./frontend/                 SvelteKit SPA dashboard
+./caddy/Caddyfile           Reverse proxy :8080 → backend + static dashboard
+./deploy/docker/            Dockerfile + compose.yml for the containerized deploy
+./scripts/deploy.sh         container build/up/down (local) and backend (legacy systemd)
 ```
 
-Served at `http://optiplex:8080` on the tailnet. Per-session iframe at `/s/<name>/`.
+Run it locally:
+
+```bash
+./scripts/deploy.sh container build
+./scripts/deploy.sh container up
+open http://localhost:8080
+```
+
+Same compose file runs on any cloud Linux VM with Docker.
 
 ---
 
@@ -71,16 +80,17 @@ Agents working in this repo: read `ARCHITECTURE.md` then the current phase doc i
 
 ## Working in this repo
 
-Primary environment is the Optiplex box (tailnet host `optiplex`). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#environment) for the deployment model. Backend code will be Rust; frontend is SvelteKit (incoming in Phase 2). Phase 0 is plain HTML.
+Primary host is `george-mac-mini` running OrbStack. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#environment) for the deployment model. Backend is Rust (`hangard`, `hangar-supervisor`), frontend is SvelteKit, both built into a single Linux container image.
 
 Local dev workflow:
 
 ```
-laptop: edit → commit → push to github.com/georgenijo/hangar
-box:    git pull → cargo build --release → systemctl restart hangar
+edit → commit → push to github.com/georgenijo/hangar
+./scripts/deploy.sh container build
+./scripts/deploy.sh container up
 ```
 
-Specifics land in each phase doc.
+Cloud VM workflow: same `Dockerfile`, deploy via `docker compose up -d`. See [`docs/decisions/0017-containerize-deployment.md`](docs/decisions/0017-containerize-deployment.md) for rationale. Specifics land in each phase doc.
 
 ---
 

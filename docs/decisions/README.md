@@ -54,3 +54,4 @@ What we chose.
 | 0014 | Dashboard visibility is the killer feature | Accepted |
 | 0015 | MVP bundles backend + UI + push + REST into one release | Accepted |
 | 0016 | Self-host ntfy behind Caddy | Accepted |
+| 0017 | Containerize deployment, OrbStack on host | Accepted |
