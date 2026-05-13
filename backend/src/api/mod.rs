@@ -6,6 +6,7 @@ pub mod key;
 pub mod logs;
 pub mod metrics;
 pub mod output;
+pub mod pipeline;
 pub mod prompt;
 pub mod resize;
 pub mod search;
@@ -83,6 +84,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/metrics/host", get(host_metrics::get_host_metrics))
         .route("/api/v1/costs/daily", get(costs::costs_daily))
         .route("/api/v1/costs/by-model", get(costs::costs_by_model))
+        .route("/api/v1/pipeline/runs", get(pipeline::list_runs))
         .route("/api/v1/logs/sources", get(logs::list_sources))
         .route("/ws/v1/sessions/:id/pty", get(crate::ws::pty::ws_pty))
         .route("/ws/v1/logs", get(crate::ws::logs::ws_handler))
