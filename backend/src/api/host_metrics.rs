@@ -33,16 +33,13 @@ pub async fn get_host_metrics() -> Json<HostMetrics> {
     };
 
     let disks = Disks::new_with_refreshed_list();
-    // Exclude virtual/network/bind-mount filesystems that inflate totals inside
-    // containers (e.g. fuse.grpcfuse is OrbStack's macOS bind mount, overlay
-    // is the container root layer, tmpfs/devtmpfs are in-memory).
-    const EXCLUDED_FS: &[&str] = &["tmpfs", "devtmpfs", "overlay", "fuse.grpcfuse", "fuse"];
+    // Only count the root filesystem ("/"). Inside containers, other mounts
+    // include host bind-mounts (virtiofs on OrbStack, fuse.grpcfuse on older
+    // Docker-for-Mac) that report the host's full disk size, inflating totals.
+    let root = std::path::Path::new("/");
     let (disk_total, disk_used) = disks
         .iter()
-        .filter(|d| {
-            let fs = d.file_system().to_string_lossy().to_lowercase();
-            !EXCLUDED_FS.iter().any(|ex| fs.contains(ex))
-        })
+        .filter(|d| d.mount_point() == root)
         .fold((0u64, 0u64), |(t, u), d| {
             (
                 t + d.total_space(),
