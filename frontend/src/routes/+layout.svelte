@@ -52,9 +52,13 @@
 				spawnOpen = true;
 				return;
 			}
-			if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+			if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+				if (leaderPending) {
+					leaderPending = false;
+					if (leaderTimer) { clearTimeout(leaderTimer); leaderTimer = null; }
+					return;
+				}
 				leaderPending = true;
-				if (leaderTimer) clearTimeout(leaderTimer);
 				leaderTimer = setTimeout(() => { leaderPending = false; }, 1500);
 				return;
 			}
