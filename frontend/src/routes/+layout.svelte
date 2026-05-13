@@ -45,7 +45,7 @@
 				return;
 			}
 
-			if (leaderPending && e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+			if (leaderPending && e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
 				e.preventDefault();
 				leaderPending = false;
 				if (leaderTimer) { clearTimeout(leaderTimer); leaderTimer = null; }
