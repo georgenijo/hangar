@@ -494,7 +494,10 @@ impl AgentDriver for ClaudeCodeDriver {
         }
 
         if let Some(AgentEvent::TurnFinished { .. }) = &ctx.last_event {
-            if ctx.current_state != SessionState::Idle {
+            // Sticky streaming: hold Streaming state for 3s after last byte so
+            // rapid turn boundaries don't flicker idle.
+            let quiet_ms = util::now_ms() as i64 - ctx.last_bytes_ms;
+            if quiet_ms > 3_000 && ctx.current_state != SessionState::Idle {
                 return Some(SessionState::Idle);
             }
         }
@@ -679,6 +682,7 @@ mod tests {
     #[test]
     fn test_detect_state_idle_after_turn_finished() {
         let d = ClaudeCodeDriver::new();
+        let stale_ms = util::now_ms() as i64 - 5_000;
         let ctx = StateCtx {
             current_state: SessionState::Streaming,
             last_activity_ms: 0,
@@ -687,7 +691,7 @@ mod tests {
                 tokens_used: 0,
                 duration_ms: 0,
             }),
-            last_bytes_ms: 0,
+            last_bytes_ms: stale_ms,
             event_timestamps: vec![],
         };
         assert_eq!(d.detect_state(&ctx), Some(SessionState::Idle));
@@ -722,5 +726,42 @@ mod tests {
             event_timestamps: vec![],
         };
         assert_eq!(d.detect_state(&ctx), None);
+    }
+
+    #[test]
+    fn test_detect_state_sticky_streaming_holds_when_bytes_recent() {
+        let d = ClaudeCodeDriver::new();
+        let recent_ms = util::now_ms() as i64 - 500; // 500ms ago — within sticky window
+        let ctx = StateCtx {
+            current_state: SessionState::Streaming,
+            last_activity_ms: 0,
+            last_event: Some(AgentEvent::TurnFinished {
+                turn_id: 1,
+                tokens_used: 0,
+                duration_ms: 0,
+            }),
+            last_bytes_ms: recent_ms,
+            event_timestamps: vec![],
+        };
+        // Should NOT transition to Idle — bytes too recent
+        assert_eq!(d.detect_state(&ctx), None);
+    }
+
+    #[test]
+    fn test_detect_state_idle_after_turn_finished_bytes_stale() {
+        let d = ClaudeCodeDriver::new();
+        let stale_ms = util::now_ms() as i64 - 5_000; // 5s ago — beyond sticky window
+        let ctx = StateCtx {
+            current_state: SessionState::Streaming,
+            last_activity_ms: 0,
+            last_event: Some(AgentEvent::TurnFinished {
+                turn_id: 1,
+                tokens_used: 0,
+                duration_ms: 0,
+            }),
+            last_bytes_ms: stale_ms,
+            event_timestamps: vec![],
+        };
+        assert_eq!(d.detect_state(&ctx), Some(SessionState::Idle));
     }
 }

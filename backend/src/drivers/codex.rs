@@ -155,7 +155,8 @@ impl AgentDriver for CodexDriver {
         }
 
         if let Some(AgentEvent::TurnFinished { .. }) = &ctx.last_event {
-            if ctx.current_state != SessionState::Idle {
+            let quiet_ms = util::now_ms() as i64 - ctx.last_bytes_ms;
+            if quiet_ms > 3_000 && ctx.current_state != SessionState::Idle {
                 return Some(SessionState::Idle);
             }
         }

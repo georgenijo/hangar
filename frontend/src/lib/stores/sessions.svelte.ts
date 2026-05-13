@@ -52,6 +52,9 @@ export const sessionsStore = {
 		});
 		return filterByLabels(sorted, selectedLabels);
 	},
+	get hasActiveSessions() {
+		return sessions.some((s) => ['streaming', 'awaiting', 'booting'].includes(s.state));
+	},
 	get hasStreamingSessions() {
 		return sessions.some((s) => s.state === 'streaming');
 	},
@@ -99,8 +102,9 @@ export const sessionsStore = {
 
 			if (intervalId !== null) {
 				clearInterval(intervalId);
+				const isActive = sessions.some((s) => ['streaming', 'awaiting', 'booting'].includes(s.state));
 				const pollMs =
-					consecutiveFailures >= 3 ? 10000 : sessions.some((s) => s.state === 'streaming') ? 500 : 3000;
+					consecutiveFailures >= 3 ? 10000 : isActive ? 500 : 3000;
 				intervalId = setInterval(tick, pollMs);
 			}
 		};
