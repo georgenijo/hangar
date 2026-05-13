@@ -11,6 +11,8 @@
 
 	// hook test edit
 	let spawnOpen = $state(false);
+	let leaderPending = $state(false);
+	let leaderTimer: ReturnType<typeof setTimeout> | null = null;
 	let collapsed = $derived(sidebarStore.dashboardCollapsed);
 
 	$effect(() => {
@@ -28,17 +30,43 @@
 
 	$effect(() => {
 		function onKey(e: KeyboardEvent) {
-			if (!e.ctrlKey || e.key !== '\\') return;
-			e.preventDefault();
-			const path = $page.url.pathname;
-			if (path.startsWith('/session/')) {
-				sidebarStore.toggleSession();
-			} else {
-				sidebarStore.toggleDashboard();
+			const tag = (e.target as HTMLElement).tagName;
+			if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+
+			if (e.ctrlKey && e.key === '\\') {
+				e.preventDefault();
+				const path = $page.url.pathname;
+				if (path.startsWith('/session/')) {
+					sidebarStore.toggleSession();
+				} else {
+					sidebarStore.toggleDashboard();
+				}
+				return;
+			}
+
+			if (leaderPending && e.key === 'n') {
+				e.preventDefault();
+				leaderPending = false;
+				if (leaderTimer) { clearTimeout(leaderTimer); leaderTimer = null; }
+				spawnOpen = true;
+				return;
+			}
+			if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+				leaderPending = true;
+				if (leaderTimer) clearTimeout(leaderTimer);
+				leaderTimer = setTimeout(() => { leaderPending = false; }, 1500);
+				return;
+			}
+			if (leaderPending) {
+				leaderPending = false;
+				if (leaderTimer) { clearTimeout(leaderTimer); leaderTimer = null; }
 			}
 		}
 		document.addEventListener('keydown', onKey);
-		return () => document.removeEventListener('keydown', onKey);
+		return () => {
+			document.removeEventListener('keydown', onKey);
+			if (leaderTimer) clearTimeout(leaderTimer);
+		};
 	});
 
 	function handleCreated(_session: Session) {
@@ -76,7 +104,7 @@
 			<div class="topbar-left">
 				<span class="logo">Hangar</span>
 			</div>
-			<button class="btn-primary" onclick={() => (spawnOpen = true)}>＋ New Session</button>
+			<button class="btn-primary" onclick={() => (spawnOpen = true)} title="New session (g n)">＋ New Session</button>
 		</header>
 
 		<div class="page-content">
