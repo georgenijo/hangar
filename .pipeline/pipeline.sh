@@ -386,6 +386,31 @@ Write test results to: $TEST_RESULTS" "$FIX_ROUND"
         fi
       fi
 
+      # Scenario gate: must have >=1 scenario with the issue ID referenced
+      SCENARIO_COUNT=$(jq '(.scenarios // []) | length' "$TEST_RESULTS" 2>/dev/null || echo 0)
+      if [ "$SCENARIO_COUNT" -lt 1 ]; then
+        echo "    [pipeline] tester produced $SCENARIO_COUNT scenarios — PASS requires >=1 bug-specific scenario"
+        GATE_PASS=false
+        GATE_NOTES="${GATE_NOTES}requires >=1 scenario in scenarios[], got $SCENARIO_COUNT; "
+      else
+        ISSUE_REF_FOUND=$(jq --arg id "$ISSUE_NUM" \
+          '[.scenarios[]? | .name // . | ascii_downcase | test("(#|issue-)" + $id)] | any' \
+          "$TEST_RESULTS" 2>/dev/null || echo "false")
+        if [ "$ISSUE_REF_FOUND" != "true" ]; then
+          echo "    [pipeline] no scenario references issue #$ISSUE_NUM — rejecting PASS"
+          GATE_PASS=false
+          GATE_NOTES="${GATE_NOTES}at least one scenario name must reference issue #$ISSUE_NUM or issue-$ISSUE_NUM; "
+        fi
+      fi
+
+      # Summary gate: must be non-empty
+      SUMMARY=$(jq -r '.summary // ""' "$TEST_RESULTS" 2>/dev/null || echo "")
+      if [ -z "$SUMMARY" ]; then
+        echo "    [pipeline] summary is empty — rejecting PASS"
+        GATE_PASS=false
+        GATE_NOTES="${GATE_NOTES}summary field must be non-empty; "
+      fi
+
       if [ "$GATE_PASS" = true ]; then
         TESTS_PASS=true
         log_test_result "$FIX_ROUND" true
