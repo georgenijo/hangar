@@ -197,17 +197,16 @@ impl ClaudeCodeDriver {
             return events;
         }
 
-        // UNVERIFIED — compaction line format needs fixture capture
+        // Compaction line: consume but emit nothing. Emitting zeros would mislead
+        // the UI; the next CTX_RE line will report the new post-compaction value.
         if COMPACT_RE.is_match(clean) {
-            events.push(AgentEvent::ContextWindowSizeChanged {
-                pct_used: 0.0,
-                tokens: 0,
-            });
             return events;
         }
 
-        // UNVERIFIED — subagent spawn format needs fixture capture
-        if SUBAGENT_RE.is_match(clean) {
+        // UNVERIFIED — subagent spawn format needs fixture capture.
+        // Guarded: hooks emit PreToolUse for the Agent tool, so skip when hooks_active
+        // to avoid duplicate ToolCallStarted events.
+        if !self.hooks_active && SUBAGENT_RE.is_match(clean) {
             let args_preview = clean.chars().take(100).collect::<String>();
             let turn_id = self.turn_counter;
             let call_id = format!("{}-subagent", turn_id);
@@ -220,8 +219,9 @@ impl ClaudeCodeDriver {
             return events;
         }
 
-        // UNVERIFIED — thinking budget exhaustion format needs fixture capture
-        if THINK_BUDGET_RE.is_match(clean) {
+        // UNVERIFIED — thinking budget exhaustion format needs fixture capture.
+        // Guarded: when hooks_active, errors arrive via Notification hooks.
+        if !self.hooks_active && THINK_BUDGET_RE.is_match(clean) {
             events.push(AgentEvent::Error {
                 message: clean.to_string(),
             });
@@ -509,6 +509,29 @@ impl AgentDriver for ClaudeCodeDriver {
         {
             if ctx.current_state != SessionState::Streaming {
                 return Some(SessionState::Streaming);
+            }
+        }
+
+        // Hung-session fallback: if stuck in Streaming and BOTH the PTY byte stream
+        // AND the agent-event stream have been silent for >90s, assume the agent
+        // finished and we missed TurnFinished. Drop to Idle (not Error).
+        if ctx.current_state == SessionState::Streaming {
+            const HUNG_THRESHOLD_MS: i64 = 90_000;
+            let now = util::now_ms() as i64;
+            let bytes_quiet_ms = now - ctx.last_bytes_ms;
+            let events_quiet_ms = ctx
+                .event_timestamps
+                .last()
+                .copied()
+                .map(|t| now - t)
+                .unwrap_or(i64::MAX);
+            if bytes_quiet_ms > HUNG_THRESHOLD_MS && events_quiet_ms > HUNG_THRESHOLD_MS {
+                tracing::warn!(
+                    bytes_quiet_ms,
+                    events_quiet_ms,
+                    "claude_code: hung session detected, forcing Idle"
+                );
+                return Some(SessionState::Idle);
             }
         }
 
