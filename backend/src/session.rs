@@ -97,6 +97,10 @@ pub struct AgentMeta {
     pub model: Option<String>,
     pub tokens_used: u64,
     pub last_tool_call: Option<String>,
+    #[serde(default)]
+    pub context_pct: Option<f32>,
+    #[serde(default)]
+    pub cost_dollars: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,6 +227,27 @@ impl Session {
             .execute(pool)
             .await?;
 
+        Ok(())
+    }
+
+    pub async fn update_agent_meta(
+        pool: &SqlitePool,
+        id: &SessionId,
+        meta: &AgentMeta,
+    ) -> Result<()> {
+        let id_str = id.to_string();
+        let meta_json = serde_json::to_string(meta)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis() as i64;
+        sqlx::query(
+            "UPDATE sessions SET agent_meta = ?, last_activity_at = ? WHERE id = ?",
+        )
+        .bind(&meta_json)
+        .bind(now)
+        .bind(&id_str)
+        .execute(pool)
+        .await?;
         Ok(())
     }
 
@@ -404,6 +429,8 @@ impl Session {
                         model: Some(legacy.model),
                         tokens_used: legacy.prompt_tokens + legacy.completion_tokens,
                         last_tool_call: None,
+                        context_pct: None,
+                        cost_dollars: None,
                     })
                 })
             })
@@ -453,4 +480,80 @@ struct SessionRow {
     last_activity_at: i64,
     exit: Option<String>,
     sandbox: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_meta_new_fields_default_null_on_legacy() {
+        let json = r#"{"name":"claude_code","tokens_used":100}"#;
+        let meta: AgentMeta = serde_json::from_str(json).unwrap();
+        assert!(meta.context_pct.is_none());
+        assert!(meta.cost_dollars.is_none());
+    }
+
+    #[test]
+    fn test_agent_meta_round_trips_new_fields() {
+        let meta = AgentMeta {
+            name: "claude_code".to_string(),
+            version: None,
+            model: Some("claude-sonnet-4".to_string()),
+            tokens_used: 1234,
+            last_tool_call: Some("Bash".to_string()),
+            context_pct: Some(0.42),
+            cost_dollars: Some(0.015),
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        let back: AgentMeta = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.tokens_used, 1234);
+        assert!((back.context_pct.unwrap() - 0.42).abs() < 1e-4);
+        assert!((back.cost_dollars.unwrap() - 0.015).abs() < 1e-6);
+        assert_eq!(back.last_tool_call.as_deref(), Some("Bash"));
+    }
+
+    #[tokio::test]
+    async fn test_update_agent_meta_persists() {
+        let db = crate::db::Db::new_in_memory().await.unwrap();
+        let pool = db.pool();
+
+        let s = Session {
+            id: SessionId::new(),
+            slug: "test-slug".to_string(),
+            node_id: "local".to_string(),
+            kind: SessionKind::ClaudeCode {
+                config_override: None,
+                project_dir: None,
+            },
+            state: SessionState::Idle,
+            cwd: "/tmp".to_string(),
+            env: serde_json::json!({}),
+            agent_meta: None,
+            labels: serde_json::json!([]),
+            created_at: 0,
+            last_activity_at: 0,
+            exit: None,
+            sandbox: None,
+        };
+        s.insert(pool).await.unwrap();
+
+        let meta = AgentMeta {
+            name: "claude_code".to_string(),
+            version: None,
+            model: Some("claude-sonnet-4".to_string()),
+            tokens_used: 999,
+            last_tool_call: Some("Bash".to_string()),
+            context_pct: Some(0.5),
+            cost_dollars: Some(0.02),
+        };
+        Session::update_agent_meta(pool, &s.id, &meta).await.unwrap();
+
+        let loaded = Session::get(pool, &s.id).await.unwrap().unwrap();
+        let m = loaded.agent_meta.unwrap();
+        assert_eq!(m.model.as_deref(), Some("claude-sonnet-4"));
+        assert_eq!(m.tokens_used, 999);
+        assert!((m.context_pct.unwrap() - 0.5).abs() < 1e-4);
+        assert!((m.cost_dollars.unwrap() - 0.02).abs() < 1e-6);
+    }
 }
