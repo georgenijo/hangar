@@ -1,8 +1,10 @@
 <script lang="ts">
 	import '../app.css';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { sessionsStore } from '$lib/stores/sessions.svelte';
 	import { sidebarStore } from '$lib/stores/sidebar.svelte';
+	import { stateColor } from '$lib/utils';
 	import LabelSidebar from '$lib/components/LabelSidebar.svelte';
 	import SpawnModal from '$lib/components/SpawnModal.svelte';
 	import type { Session } from '$lib/types';
@@ -12,6 +14,14 @@
 	// hook test edit
 	let spawnOpen = $state(false);
 	let collapsed = $derived(sidebarStore.dashboardCollapsed);
+
+	let aliveSessions = $derived(
+		sessionsStore.sessions.filter((s) => s.state !== 'exited')
+	);
+
+	let activeSessionId = $derived(
+		$page.url.pathname.match(/^\/session\/([^/]+)/)?.[1] ?? null
+	);
 
 	$effect(() => {
 		sessionsStore.startPolling();
@@ -100,6 +110,22 @@
 				<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>Sessions</a>
 				<a href="/logs" class="nav-link" class:active={$page.url.pathname === '/logs'}>Logs</a>
 			</nav>
+			{#if aliveSessions.length > 0}
+				<div class="session-list">
+					{#each aliveSessions as session (session.id)}
+						{@const isActive = activeSessionId === session.id}
+						<button
+							class="session-row"
+							class:active={isActive}
+							onclick={() => goto(`/session/${session.id}`)}
+							title={session.slug}
+						>
+							<span class="session-dot" style="background:{stateColor(session.state)}"></span>
+							<span class="session-slug">{session.slug}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 			<LabelSidebar />
 		{/if}
 	</aside>
@@ -264,6 +290,58 @@
 	.nav-link.active {
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent);
+	}
+
+	.session-list {
+		display: flex;
+		flex-direction: column;
+		padding: 6px 8px;
+		gap: 1px;
+		border-bottom: 1px solid var(--border);
+		max-height: 40vh;
+		overflow-y: auto;
+	}
+
+	.session-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 6px;
+		border-radius: var(--radius);
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 0.78rem;
+		font-family: var(--font-mono);
+		cursor: pointer;
+		text-align: left;
+		width: 100%;
+		overflow: hidden;
+		transition: all 0.1s;
+	}
+
+	.session-row:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+
+	.session-row.active {
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		color: var(--accent);
+	}
+
+	.session-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.session-slug {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
 	}
 
 	@media (max-width: 768px) {
