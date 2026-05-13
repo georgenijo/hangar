@@ -33,6 +33,14 @@ Write your results to the file path specified in the prompt.
 ```json
 {
   "status": "PASS" | "FAIL",
+  "summary": "One sentence describing what was verified and the outcome.",
+  "scenarios": [
+    {
+      "name": "issue-<N>: <short description of the specific bug/feature repro>",
+      "status": "pass" | "fail",
+      "details": "step-by-step of what was done and observed"
+    }
+  ],
   "tests": [
     {
       "name": "descriptive test name",
@@ -54,3 +62,5 @@ Write your results to the file path specified in the prompt.
 - Take screenshots of failures
 - Always close the browser when done
 - CRITICAL: Write your results to the file path given in the prompt
+- CRITICAL: `scenarios` must contain at least one entry named with the issue ID (e.g. `"issue-60: cost sidebar shows live value"`). Generic dashboard sweeps are not enough — reproduce the specific bug from the issue.
+- CRITICAL: `summary` must be a non-empty sentence. A PASS with empty summary or empty scenarios will be rejected by the pipeline gate.
