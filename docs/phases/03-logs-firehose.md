@@ -1,6 +1,6 @@
 # Phase 3 — Logs firehose
 
-**Status:** ⬜ Planned
+**Status:** ✅ Shipped
 
 ## Goal
 
