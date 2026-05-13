@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { Session } from '$lib/types';
-	import { normalizeLabels, kindLabel, kindIcon } from '$lib/api';
+	import { normalizeLabels, kindLabel, kindIcon, deleteSession } from '$lib/api';
 	import { formatIdleTime, formatTokens, truncate, stateColor } from '$lib/utils';
+	import { sessionsStore } from '$lib/stores/sessions.svelte';
 
 	let { session }: { session: Session } = $props();
 
 	let idleTime = $state('');
+	let removing = $state(false);
+	let removeError = $state('');
 
 	$effect(() => {
 		idleTime = formatIdleTime(session.last_activity_at);
@@ -32,12 +35,41 @@
 				return '•';
 		}
 	}
+
+	async function handleRemove(e: MouseEvent) {
+		e.stopPropagation();
+		const isLive = session.state !== 'exited';
+		if (isLive && !confirm(`Remove session "${session.slug}"? This will kill the process.`)) return;
+		removing = true;
+		removeError = '';
+		try {
+			await deleteSession(session.id);
+			sessionsStore.removeSession(session.id);
+		} catch (err) {
+			removeError = err instanceof Error ? err.message : 'Remove failed';
+			removing = false;
+		}
+	}
 </script>
 
-<button class="tile" onclick={() => goto(`/session/${session.id}`)}>
+<div
+	class="tile"
+	role="button"
+	tabindex="0"
+	onclick={(e) => { if (!(e.target as HTMLElement).closest('.remove-btn')) goto(`/session/${session.id}`); }}
+	onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') goto(`/session/${session.id}`); }}
+>
 	<div class="tile-header">
 		<span class="slug mono">{session.slug}</span>
 		<span class="kind-icon" title={kindLabel(session.kind)}>{iconChar(kindIcon(session.kind))}</span>
+		<button
+			class="remove-btn"
+			class:removing
+			onclick={handleRemove}
+			title="Remove session"
+			disabled={removing}
+			aria-label="Remove session"
+		>✕</button>
 		<span class="state-badge" style="background: {stateColor(session.state)}20; color: {stateColor(session.state)}; border-color: {stateColor(session.state)}40">
 			<span class="state-dot" style="background: {stateColor(session.state)}" class:pulse={session.state === 'streaming'}></span>
 			{session.state}
@@ -80,7 +112,10 @@
 			{/if}
 		</div>
 	{/if}
-</button>
+	{#if removeError}
+		<div class="remove-error">{removeError}</div>
+	{/if}
+</div>
 
 <style>
 	.tile {
@@ -97,6 +132,11 @@
 		color: var(--text);
 		transition: border-color 0.15s, transform 0.1s;
 		min-width: 280px;
+		outline: none;
+	}
+
+	.tile:focus-visible {
+		border-color: var(--accent);
 	}
 
 	.tile:hover {
@@ -218,5 +258,40 @@
 		background: #7c3aed20;
 		color: #7c3aed;
 		border-color: #7c3aed40;
+	}
+
+	.remove-btn {
+		margin-left: auto;
+		background: none;
+		border: 1px solid transparent;
+		border-radius: var(--radius);
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 0.75rem;
+		line-height: 1;
+		padding: 2px 6px;
+		flex-shrink: 0;
+		opacity: 0;
+		transition: opacity 0.15s, color 0.1s, border-color 0.1s;
+	}
+
+	.tile:hover .remove-btn {
+		opacity: 1;
+	}
+
+	.remove-btn:hover {
+		color: #f44336;
+		border-color: rgba(244, 67, 54, 0.4);
+	}
+
+	.remove-btn.removing {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.remove-error {
+		font-size: 0.75rem;
+		color: #f44336;
+		padding: 2px 0;
 	}
 </style>
