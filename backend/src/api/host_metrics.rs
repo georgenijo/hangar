@@ -53,7 +53,10 @@ pub async fn get_host_metrics() -> Json<HostMetrics> {
         0.0
     };
 
-    let hostname = System::host_name().unwrap_or_else(|| "unknown".to_string());
+    let hostname = std::env::var("HANGAR_HOSTNAME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| System::host_name().unwrap_or_else(|| "unknown".to_string()));
 
     Json(HostMetrics {
         hostname,
